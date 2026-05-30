@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
   TouchableOpacity,
+  useWindowDimensions,
   Modal,
   Alert,
   Platform,
@@ -18,8 +18,6 @@ import { loadAppData, saveAccount } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 import InputField from '../components/InputField';
-
-const { width: screenWidth } = Dimensions.get('window');
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'checking', label: 'Checking' },
@@ -38,6 +36,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 export default function AccountDetailScreen() {
   const route = useRoute<any>();
   const { accountId } = route.params;
+  const { width: screenWidth } = useWindowDimensions();
 
   const [data, setData] = useState<AppData | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -153,7 +152,7 @@ export default function AccountDetailScreen() {
           <View style={styles.chartContainer}>
             <LargeChart
               data={chartData}
-              width={screenWidth - 40}
+              width={Math.min(screenWidth - 40, 800)}
               height={220}
               color={Colors.accent}
             />

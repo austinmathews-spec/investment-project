@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   Modal,
   Alert,
   Platform,
@@ -31,11 +31,10 @@ import Card from '../components/Card';
 import LargeChart from '../components/LargeChart';
 import InputField from '../components/InputField';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 type Tab = 'retirement' | 'networth';
 
 export default function ForecastScreen() {
+  const { width: screenWidth } = useWindowDimensions();
   const [data, setData] = useState<AppData | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('retirement');
   const [retModalVisible, setRetModalVisible] = useState(false);
@@ -236,7 +235,7 @@ export default function ForecastScreen() {
                       width={screenWidth - 80}
                       height={200}
                       color={Colors.accent}
-                      title="PROJECTED GROWTH"
+                      title="PROJECTED GROWTH (TODAY'S DOLLARS)"
                     />
                   </Card>
 
@@ -244,8 +243,12 @@ export default function ForecastScreen() {
                     <Text style={styles.sectionTitle}>PROJECTED AT RETIREMENT</Text>
                     <View style={styles.statGrid}>
                       <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Portfolio Value</Text>
+                        <Text style={styles.statLabel}>Portfolio (today's $)</Text>
                         <Text style={styles.statValue}>{formatCurrency(income.projectedBalance)}</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>Portfolio (nominal)</Text>
+                        <Text style={styles.statValue}>{formatCurrency(income.projectedBalanceNominal)}</Text>
                       </View>
                       <View style={styles.statItem}>
                         <Text style={styles.statLabel}>Annual (4% Rule)</Text>
@@ -257,7 +260,15 @@ export default function ForecastScreen() {
                       </View>
                       <View style={styles.statItem}>
                         <Text style={styles.statLabel}>Years of Income</Text>
-                        <Text style={styles.statValue}>{income.yearsOfIncome.toFixed(1)}</Text>
+                        <Text style={styles.statValue}>{income.yearsOfIncome >= 80 ? '80+' : income.yearsOfIncome.toString()}</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>Total Contributed</Text>
+                        <Text style={styles.statValue}>{formatCurrency(income.totalContributed)}</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>Investment Growth</Text>
+                        <Text style={[styles.statValue, { color: Colors.positive }]}>+{formatCurrency(income.investmentGrowth)}</Text>
                       </View>
                     </View>
                   </Card>
@@ -308,26 +319,40 @@ export default function ForecastScreen() {
 
                   <Card>
                     <Text style={styles.sectionTitle}>PROJECTED OUTCOME</Text>
-                    <View style={styles.statGrid}>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Starting</Text>
-                        <Text style={styles.statValue}>{formatCurrency(scenario.startingNetWorth)}</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Final Net Worth</Text>
-                        <Text style={[styles.statValue, { color: Colors.accent }]}>{formatCurrency(finalValue)}</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Total Gain</Text>
-                        <Text style={[styles.statValue, { color: Colors.positive }]}>+{formatCurrency(totalGain)}</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Total Contributed</Text>
-                        <Text style={styles.statValue}>
-                          {formatCurrency(scenario.monthlySavings * scenario.years * 12)}
-                        </Text>
-                      </View>
-                    </View>
+                    {(() => {
+                      const totalContributed = scenario.startingNetWorth + scenario.monthlySavings * scenario.years * 12;
+                      const investmentGrowth = finalValue - totalContributed;
+                      return (
+                        <View style={styles.statGrid}>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Starting</Text>
+                            <Text style={styles.statValue}>{formatCurrency(scenario.startingNetWorth)}</Text>
+                          </View>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Final Net Worth</Text>
+                            <Text style={[styles.statValue, { color: Colors.accent }]}>{formatCurrency(finalValue)}</Text>
+                          </View>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Total Contributed</Text>
+                            <Text style={styles.statValue}>
+                              {formatCurrency(scenario.monthlySavings * scenario.years * 12)}
+                            </Text>
+                          </View>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Investment Growth</Text>
+                            <Text style={[styles.statValue, { color: Colors.positive }]}>+{formatCurrency(investmentGrowth)}</Text>
+                          </View>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Total Gain</Text>
+                            <Text style={[styles.statValue, { color: Colors.positive }]}>+{formatCurrency(totalGain)}</Text>
+                          </View>
+                          <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Growth Multiple</Text>
+                            <Text style={styles.statValue}>{(finalValue / scenario.startingNetWorth).toFixed(1)}x</Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
                   </Card>
                 </View>
               );

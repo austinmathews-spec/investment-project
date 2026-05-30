@@ -4,9 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
   RefreshControl,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
@@ -14,15 +14,16 @@ import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { AppData } from '../types';
 import { loadAppData, syncWithAirtable, loadAirtableConfig } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
+import { calculateFIRENumber } from '../utils/forecast';
 import LargeChart from '../components/LargeChart';
 import ProgressBar from '../components/ProgressBar';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export default function DashboardScreen() {
+  const { width: screenWidth } = useWindowDimensions();
   const [data, setData] = useState<AppData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation<any>();
+  const chartWidth = Math.min(screenWidth - 40, 800);
 
   const loadData = useCallback(async () => {
     const config = await loadAirtableConfig();
@@ -72,6 +73,19 @@ export default function DashboardScreen() {
   }, {});
   const sortedTypes = Object.entries(accountsByType).sort((a, b) => b[1] - a[1]);
 
+  // Financial insights
+  const totalMonthlyExpenses = data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0);
+  const annualExpenses = totalMonthlyExpenses * 12;
+  const fireNumber = calculateFIRENumber(annualExpenses);
+  const fireProgress = fireNumber > 0 ? Math.min(totalBalance / fireNumber, 1) : 0;
+
+  // Expense breakdown by category
+  const expensesByCategory = data.expenses.reduce<Record<string, number>>((acc, e) => {
+    acc[e.category] = (acc[e.category] || 0) + e.effectiveAmount;
+    return acc;
+  }, {});
+  const sortedExpenseCategories = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]);
+
   const navigateToAccount = (accountId: string, accountName: string) => {
     navigation.navigate('AccountDetail', { accountId, accountName });
   };
@@ -108,7 +122,7 @@ export default function DashboardScreen() {
         <View style={styles.chartContainer}>
           <LargeChart
             data={chartData}
-            width={screenWidth - 40}
+            width={chartWidth}
             height={200}
             color={Colors.accent}
           />
@@ -152,6 +166,66 @@ export default function DashboardScreen() {
           ))}
         </View>
       </View>
+
+      {/* Financial Insights */}
+      {data.expenses.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Financial Insights</Text>
+
+          {/* FIRE Progress */}
+          <View style={styles.insightTile}>
+            <View style={styles.insightHeader}>
+              <View style={styles.insightLabelRow}>
+                <Feather name="target" size={16} color={Colors.accent} />
+                <Text style={styles.insightLabel}>FIRE Number</Text>
+              </View>
+              <Text style={styles.insightValue}>{formatCurrency(fireNumber)}</Text>
+            </View>
+            <ProgressBar progress={fireProgress} color={Colors.accent} height={6} />
+            <Text style={styles.insightSubtext}>
+              {(fireProgress * 100).toFixed(1)}% to financial independence (4% rule)
+            </Text>
+          </View>
+
+          {/* Monthly Expenses */}
+          <View style={styles.insightTile}>
+            <View style={styles.insightHeader}>
+              <View style={styles.insightLabelRow}>
+                <Feather name="credit-card" size={16} color={Colors.negative} />
+                <Text style={styles.insightLabel}>Monthly Expenses</Text>
+              </View>
+              <Text style={[styles.insightValue, { color: Colors.negative }]}>
+                -{formatCurrency(totalMonthlyExpenses)}
+              </Text>
+            </View>
+            {sortedExpenseCategories.map(([category, amount], i) => (
+              <View key={category} style={styles.categoryRow}>
+                <View style={styles.categoryLabelRow}>
+                  <View style={[styles.dot, { backgroundColor: Colors.goalColors[i % Colors.goalColors.length] }]} />
+                  <Text style={styles.categoryLabel}>{category}</Text>
+                </View>
+                <Text style={styles.categoryAmount}>
+                  {formatCurrency(amount)}/mo ({totalMonthlyExpenses > 0 ? ((amount / totalMonthlyExpenses) * 100).toFixed(0) : 0}%)
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Annual Burn */}
+          <View style={styles.insightRow}>
+            <View style={styles.insightStat}>
+              <Text style={styles.insightStatLabel}>Annual Expenses</Text>
+              <Text style={styles.insightStatValue}>{formatCurrency(annualExpenses)}</Text>
+            </View>
+            <View style={styles.insightStat}>
+              <Text style={styles.insightStatLabel}>Runway</Text>
+              <Text style={styles.insightStatValue}>
+                {totalMonthlyExpenses > 0 ? (totalBalance / totalMonthlyExpenses).toFixed(0) : '∞'} mo
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Account Tiles */}
       <View style={styles.section}>
@@ -353,6 +427,79 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
     marginTop: 2,
+  },
+  // Financial Insights
+  insightTile: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  insightLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  insightLabel: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  insightValue: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+  },
+  insightSubtext: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: Spacing.xs,
+  },
+  insightRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  insightStat: {
+    flex: 1,
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+  },
+  insightStatLabel: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.xs,
+    fontWeight: '500',
+    marginBottom: Spacing.xs,
+  },
+  insightStatValue: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  categoryLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryLabel: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+  },
+  categoryAmount: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.sm,
+    fontWeight: '500',
   },
   // Account Tiles
   accountTile: {

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
@@ -8,9 +8,8 @@ import { loadAppData } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export default function TrendsScreen() {
+  const { width: screenWidth } = useWindowDimensions();
   const [data, setData] = useState<AppData | null>(null);
 
   useFocusEffect(
@@ -70,7 +69,7 @@ export default function TrendsScreen() {
         <View style={styles.chartContainer}>
           <LargeChart
             data={chartData}
-            width={screenWidth - 40}
+            width={Math.min(screenWidth - 40, 800)}
             height={220}
             color={Colors.accent}
           />
