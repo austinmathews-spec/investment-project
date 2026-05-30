@@ -348,7 +348,7 @@ export default function ForecastScreen() {
                           </View>
                           <View style={styles.statItem}>
                             <Text style={styles.statLabel}>Growth Multiple</Text>
-                            <Text style={styles.statValue}>{(finalValue / scenario.startingNetWorth).toFixed(1)}x</Text>
+                            <Text style={styles.statValue}>{scenario.startingNetWorth > 0 ? `${(finalValue / scenario.startingNetWorth).toFixed(1)}x` : 'N/A'}</Text>
                           </View>
                         </View>
                       );
