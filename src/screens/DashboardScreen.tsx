@@ -344,6 +344,15 @@ export default function DashboardScreen() {
                   .reduce((sum, a) => sum + a.balance, 0)
               : goal.currentAmount;
             const progress = goal.targetAmount > 0 ? goalCurrent / goal.targetAmount : 0;
+            const remaining = Math.max(0, goal.targetAmount - goalCurrent);
+            const goalTargetDate = new Date(goal.targetDate);
+            const nowDate = new Date();
+            const monthsLeft = Math.max(
+              0,
+              (goalTargetDate.getFullYear() - nowDate.getFullYear()) * 12 +
+                (goalTargetDate.getMonth() - nowDate.getMonth())
+            );
+            const monthlyNeeded = monthsLeft > 0 ? remaining / monthsLeft : 0;
             const linkedAccounts = goal.linkedAccountIds
               ? data.accounts.filter(a => goal.linkedAccountIds!.includes(a.id))
               : [];
@@ -358,6 +367,16 @@ export default function DashboardScreen() {
                   <Text style={styles.goalFooterText}>
                     {formatCurrency(goalCurrent)} of {formatCurrency(goal.targetAmount)}
                   </Text>
+                  {remaining > 0 && monthsLeft > 0 && (
+                    <Text style={styles.goalFooterText}>
+                      {formatCurrency(monthlyNeeded)}/mo for {monthsLeft}mo
+                    </Text>
+                  )}
+                  {remaining > 0 && monthsLeft === 0 && (
+                    <Text style={[styles.goalFooterText, { color: Colors.negative }]}>
+                      Past due · {formatCurrency(remaining)} left
+                    </Text>
+                  )}
                 </View>
                 {linkedAccounts.length > 0 && (
                   <View style={styles.goalLinkedAccounts}>
@@ -672,6 +691,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   goalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: Spacing.xs,
   },
   goalFooterText: {
