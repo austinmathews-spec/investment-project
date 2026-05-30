@@ -110,7 +110,13 @@ export default function AccountsScreen() {
 
   if (!data) return null;
 
-  const totalBalance = data.accounts.reduce((sum, a) => sum + a.balance, 0);
+  const filteredAccounts = data.accounts.filter(a => {
+    if (sourceFilter === 'Excl. Non-Cash' && a.sourceTable === 'Non-Cash Assets') return false;
+    if (sourceFilter !== 'All' && sourceFilter !== 'Excl. Non-Cash' && a.sourceTable !== sourceFilter) return false;
+    if (typeFilter !== 'All' && accountTypeLabel(a.type) !== typeFilter) return false;
+    return true;
+  });
+  const filteredBalance = filteredAccounts.reduce((sum, a) => sum + a.balance, 0);
 
   return (
     <View style={styles.container}>
@@ -119,9 +125,9 @@ export default function AccountsScreen() {
         {/* Total */}
         <View style={styles.totalSection}>
           <Text style={styles.totalLabel}>Total Balance</Text>
-          <Text style={styles.totalAmount}>{formatCurrencyDecimal(totalBalance)}</Text>
+          <Text style={styles.totalAmount}>{formatCurrencyDecimal(filteredBalance)}</Text>
           <Text style={styles.accountCount}>
-            {data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}
+            {filteredAccounts.length} account{filteredAccounts.length !== 1 ? 's' : ''}
           </Text>
         </View>
 
@@ -151,14 +157,7 @@ export default function AccountsScreen() {
         />
 
         {/* Account Tiles */}
-        {data.accounts
-          .filter(a => {
-            if (sourceFilter === 'Excl. Non-Cash' && a.sourceTable === 'Non-Cash Assets') return false;
-            if (sourceFilter !== 'All' && sourceFilter !== 'Excl. Non-Cash' && a.sourceTable !== sourceFilter) return false;
-            if (typeFilter !== 'All' && accountTypeLabel(a.type) !== typeFilter) return false;
-            return true;
-          })
-          .map((account) => (
+        {filteredAccounts.map((account) => (
           <TouchableOpacity
             key={account.id}
             style={styles.accountTile}
