@@ -17,13 +17,20 @@ import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } f
 import { calculateFIRENumber } from '../utils/forecast';
 import LargeChart from '../components/LargeChart';
 import ProgressBar from '../components/ProgressBar';
+import FilterChips from '../components/FilterChips';
 
 export default function DashboardScreen() {
   const { width: screenWidth } = useWindowDimensions();
+  const isDesktop = screenWidth >= 768;
   const [data, setData] = useState<AppData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [accountFilter, setAccountFilter] = useState('All');
+  const [sourceFilter, setSourceFilter] = useState('Excl. Non-Cash');
+  const [expenseFilter, setExpenseFilter] = useState('All');
   const navigation = useNavigation<any>();
-  const chartWidth = Math.min(screenWidth - 40, 800);
+  const contentMaxWidth = 960;
+  const contentWidth = Math.min(screenWidth, contentMaxWidth);
+  const chartWidth = Math.min(contentWidth - 40, 800);
 
   const loadData = useCallback(async () => {
     const config = await loadAirtableConfig();
@@ -86,6 +93,29 @@ export default function DashboardScreen() {
   }, {});
   const sortedExpenseCategories = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]);
 
+  // Source table filter options
+  const sourceTableOptions = ['All', 'Excl. Non-Cash', ...Array.from(new Set(data.accounts.map(a => a.sourceTable)))];
+  const sourceFilteredAccounts = sourceFilter === 'All'
+    ? data.accounts
+    : sourceFilter === 'Excl. Non-Cash'
+    ? data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets')
+    : data.accounts.filter(a => a.sourceTable === sourceFilter);
+
+  // Account type filter options (applied after source filter)
+  const accountTypeOptions = ['All', ...Array.from(new Set(sourceFilteredAccounts.map(a => accountTypeLabel(a.type))))];
+  const filteredAccounts = accountFilter === 'All'
+    ? sourceFilteredAccounts
+    : sourceFilteredAccounts.filter(a => accountTypeLabel(a.type) === accountFilter);
+
+  const expenseCategoryOptions = ['All', ...Array.from(new Set(data.expenses.map(e => e.category)))];
+  const filteredExpenses = expenseFilter === 'All'
+    ? data.expenses
+    : data.expenses.filter(e => e.category === expenseFilter);
+
+  // Data date (most recent snapshot or account update)
+  const latestSnapshot = data.snapshots.length > 0 ? data.snapshots[data.snapshots.length - 1] : null;
+  const dataDate = latestSnapshot?.date || (data.accounts.length > 0 ? data.accounts[0].lastUpdated : null);
+
   const navigateToAccount = (accountId: string, accountName: string) => {
     navigation.navigate('AccountDetail', { accountId, accountName });
   };
@@ -93,13 +123,17 @@ export default function DashboardScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { alignItems: 'center' }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
     >
+      <View style={[styles.contentInner, { maxWidth: contentMaxWidth, width: '100%' }]}>
       {/* Net Worth Hero */}
       <View style={styles.heroSection}>
         <Text style={styles.heroLabel}>Net Worth</Text>
         <Text style={styles.heroAmount}>{formatCurrencyDecimal(totalBalance)}</Text>
+        {dataDate && (
+          <Text style={styles.heroDate}>as of {formatDate(dataDate)}</Text>
+        )}
         {prevSnapshot && (
           <View style={styles.changeRow}>
             <View style={[styles.changeBadge, { backgroundColor: isPositive ? Colors.accentDim : 'rgba(255,80,0,0.08)' }]}>
@@ -230,7 +264,9 @@ export default function DashboardScreen() {
       {/* Account Tiles */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Accounts</Text>
-        {data.accounts.map((account) => (
+        <FilterChips options={sourceTableOptions} selected={sourceFilter} onSelect={setSourceFilter} />
+        <FilterChips options={accountTypeOptions} selected={accountFilter} onSelect={setAccountFilter} />
+        {filteredAccounts.map((account) => (
           <TouchableOpacity
             key={account.id}
             style={styles.accountTile}
@@ -243,6 +279,7 @@ export default function DashboardScreen() {
                   name={
                     account.type === 'crypto' ? 'activity' :
                     account.type === 'real_estate' ? 'home' :
+                    account.type === 'vehicle' ? 'truck' :
                     account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
                     account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
                     'credit-card'
@@ -255,6 +292,7 @@ export default function DashboardScreen() {
                 <Text style={styles.accountTileName}>{account.name}</Text>
                 <Text style={styles.accountTileMeta}>
                   {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                  {account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
                 </Text>
               </View>
             </View>
@@ -272,7 +310,8 @@ export default function DashboardScreen() {
       {data.expenses && data.expenses.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Monthly Expenses</Text>
-          {data.expenses.map((expense) => (
+          <FilterChips options={expenseCategoryOptions} selected={expenseFilter} onSelect={setExpenseFilter} />
+          {filteredExpenses.map((expense) => (
             <View key={expense.id} style={styles.expenseRow}>
               <View>
                 <Text style={styles.expenseName}>{expense.name}</Text>
@@ -286,9 +325,9 @@ export default function DashboardScreen() {
             </View>
           ))}
           <View style={styles.expenseTotalRow}>
-            <Text style={styles.expenseTotalLabel}>Total Monthly</Text>
+            <Text style={styles.expenseTotalLabel}>{expenseFilter === 'All' ? 'Total Monthly' : `${expenseFilter} Total`}</Text>
             <Text style={styles.expenseTotalAmount}>
-              -{formatCurrency(data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0))}
+              -{formatCurrency(filteredExpenses.reduce((sum, e) => sum + e.effectiveAmount, 0))}
             </Text>
           </View>
         </View>
@@ -299,24 +338,42 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Goals</Text>
           {data.goals.map((goal) => {
-            const progress = goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
+            const goalCurrent = goal.linkedAccountIds && goal.linkedAccountIds.length > 0
+              ? data.accounts
+                  .filter(a => goal.linkedAccountIds!.includes(a.id))
+                  .reduce((sum, a) => sum + a.balance, 0)
+              : goal.currentAmount;
+            const progress = goal.targetAmount > 0 ? goalCurrent / goal.targetAmount : 0;
+            const linkedAccounts = goal.linkedAccountIds
+              ? data.accounts.filter(a => goal.linkedAccountIds!.includes(a.id))
+              : [];
             return (
               <View key={goal.id} style={styles.goalTile}>
                 <View style={styles.goalHeader}>
                   <Text style={styles.goalName}>{goal.name}</Text>
-                  <Text style={styles.goalPercent}>{(progress * 100).toFixed(0)}%</Text>
+                  <Text style={styles.goalPercent}>{(Math.min(progress, 1) * 100).toFixed(0)}%</Text>
                 </View>
-                <ProgressBar progress={progress} color={goal.color} height={6} />
+                <ProgressBar progress={Math.min(progress, 1)} color={goal.color} height={6} />
                 <View style={styles.goalFooter}>
                   <Text style={styles.goalFooterText}>
-                    {formatCurrency(goal.currentAmount)} of {formatCurrency(goal.targetAmount)}
+                    {formatCurrency(goalCurrent)} of {formatCurrency(goal.targetAmount)}
                   </Text>
                 </View>
+                {linkedAccounts.length > 0 && (
+                  <View style={styles.goalLinkedAccounts}>
+                    {linkedAccounts.map(a => (
+                      <Text key={a.id} style={styles.goalLinkedAccountText}>
+                        {a.name}: {formatCurrencyDecimal(a.balance)}
+                      </Text>
+                    ))}
+                  </View>
+                )}
               </View>
             );
           })}
         </View>
       )}
+      </View>
     </ScrollView>
   );
 }
@@ -329,10 +386,13 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: Spacing.xxl,
   },
+  contentInner: {
+    alignSelf: 'center',
+  },
   heroSection: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs,
   },
   heroLabel: {
     color: Colors.textSecondary,
@@ -345,6 +405,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -1,
     marginTop: 2,
+  },
+  heroDate: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: Spacing.xs,
   },
   changeRow: {
     flexDirection: 'row',
@@ -374,13 +439,13 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: Spacing.lg,
-    marginTop: Spacing.xl,
+    marginTop: Spacing.lg,
   },
   sectionTitle: {
     color: Colors.textPrimary,
     fontSize: FontSizes.xl,
     fontWeight: '700',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   // Allocation
   allocationBar: {
@@ -612,5 +677,16 @@ const styles = StyleSheet.create({
   goalFooterText: {
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
+  },
+  goalLinkedAccounts: {
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 0.5,
+    borderTopColor: Colors.border,
+  },
+  goalLinkedAccountText: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    paddingVertical: 1,
   },
 });

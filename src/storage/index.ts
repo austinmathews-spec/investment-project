@@ -25,10 +25,17 @@ const emptyData: AppData = {
 
 // ─── Airtable config persistence ─────────────────────────────────
 
+const ENV_PAT = process.env.EXPO_PUBLIC_AIRTABLE_PAT || '';
+const ENV_BASE_ID = process.env.EXPO_PUBLIC_AIRTABLE_BASE_ID || '';
+
 export async function loadAirtableConfig(): Promise<AirtableConfig | null> {
   const raw = await AsyncStorage.getItem(CONFIG_KEY);
-  if (!raw) return null;
-  return JSON.parse(raw) as AirtableConfig;
+  if (raw) return JSON.parse(raw) as AirtableConfig;
+  // Fall back to environment variables (for Vercel deployment)
+  if (ENV_PAT && ENV_BASE_ID) {
+    return { pat: ENV_PAT, baseId: ENV_BASE_ID };
+  }
+  return null;
 }
 
 export async function saveAirtableConfig(config: AirtableConfig): Promise<void> {
@@ -49,6 +56,11 @@ export async function loadAppData(): Promise<AppData> {
   const parsed = JSON.parse(raw) as AppData;
   // Ensure expenses array exists for older cached data
   if (!parsed.expenses) parsed.expenses = [];
+  // Backfill sourceTable for older cached accounts
+  parsed.accounts = parsed.accounts.map(a => ({
+    ...a,
+    sourceTable: a.sourceTable || 'Local',
+  }));
   return parsed;
 }
 

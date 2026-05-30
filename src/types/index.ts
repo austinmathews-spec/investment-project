@@ -9,7 +9,10 @@ export type AccountType =
   | '529'
   | 'crypto'
   | 'real_estate'
+  | 'vehicle'
   | 'other';
+
+export type SourceTable = 'Savings & Investment' | 'Non-Cash Assets' | 'Debt' | 'Local';
 
 export interface Account {
   id: string;
@@ -18,6 +21,7 @@ export interface Account {
   balance: number;
   institution: string;
   lastUpdated: string; // ISO date
+  sourceTable: SourceTable;
 }
 
 export interface NetWorthSnapshot {
@@ -36,6 +40,7 @@ export interface Goal {
   currentAmount: number;
   targetDate: string; // ISO date
   color: string;
+  linkedAccountIds?: string[]; // when set, progress is auto-calculated from account balances
 }
 
 export interface RetirementScenario {

@@ -8,6 +8,7 @@ export const sampleAccounts: Account[] = [
     balance: 8420.50,
     institution: 'Chase',
     lastUpdated: '2026-05-15',
+    sourceTable: 'Local',
   },
   {
     id: 'acc-2',
@@ -16,6 +17,7 @@ export const sampleAccounts: Account[] = [
     balance: 25000.00,
     institution: 'Ally Bank',
     lastUpdated: '2026-05-15',
+    sourceTable: 'Local',
   },
   {
     id: 'acc-3',
@@ -24,6 +26,7 @@ export const sampleAccounts: Account[] = [
     balance: 87500.00,
     institution: 'Fidelity',
     lastUpdated: '2026-05-01',
+    sourceTable: 'Local',
   },
   {
     id: 'acc-4',
@@ -32,6 +35,7 @@ export const sampleAccounts: Account[] = [
     balance: 42300.00,
     institution: 'Vanguard',
     lastUpdated: '2026-05-01',
+    sourceTable: 'Local',
   },
   {
     id: 'acc-5',
@@ -40,6 +44,7 @@ export const sampleAccounts: Account[] = [
     balance: 31200.00,
     institution: 'Schwab',
     lastUpdated: '2026-04-30',
+    sourceTable: 'Local',
   },
   {
     id: 'acc-6',
@@ -48,6 +53,7 @@ export const sampleAccounts: Account[] = [
     balance: 5800.00,
     institution: 'Coinbase',
     lastUpdated: '2026-05-10',
+    sourceTable: 'Local',
   },
 ];
 

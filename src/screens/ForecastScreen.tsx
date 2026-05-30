@@ -30,6 +30,7 @@ import {
 import Card from '../components/Card';
 import LargeChart from '../components/LargeChart';
 import InputField from '../components/InputField';
+import FilterChips from '../components/FilterChips';
 
 type Tab = 'retirement' | 'networth';
 
@@ -185,26 +186,14 @@ export default function ForecastScreen() {
   return (
     <View style={styles.container}>
       {/* Tab Switcher */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'retirement' && styles.tabActive]}
-          onPress={() => setActiveTab('retirement')}
-        >
-          <Text style={[styles.tabText, activeTab === 'retirement' && styles.tabTextActive]}>
-            Retirement
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'networth' && styles.tabActive]}
-          onPress={() => setActiveTab('networth')}
-        >
-          <Text style={[styles.tabText, activeTab === 'networth' && styles.tabTextActive]}>
-            Net Worth
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <FilterChips
+        options={['Retirement', 'Net Worth']}
+        selected={activeTab === 'retirement' ? 'Retirement' : 'Net Worth'}
+        onSelect={(opt) => setActiveTab(opt === 'Retirement' ? 'retirement' : 'networth')}
+      />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
+        <View style={styles.contentInner}>
         {activeTab === 'retirement' && (
           <>
             {data.retirementScenarios.map((scenario) => {
@@ -232,7 +221,7 @@ export default function ForecastScreen() {
                   <Card>
                     <LargeChart
                       data={chartData}
-                      width={screenWidth - 80}
+                      width={Math.min(screenWidth - 80, 880)}
                       height={200}
                       color={Colors.accent}
                       title="PROJECTED GROWTH (TODAY'S DOLLARS)"
@@ -310,7 +299,7 @@ export default function ForecastScreen() {
                   <Card>
                     <LargeChart
                       data={chartData}
-                      width={screenWidth - 80}
+                      width={Math.min(screenWidth - 80, 880)}
                       height={200}
                       color="#4A90D9"
                       title="NET WORTH PROJECTION"
@@ -363,6 +352,7 @@ export default function ForecastScreen() {
             </TouchableOpacity>
           </>
         )}
+        </View>
       </ScrollView>
 
       {/* Retirement Modal */}
@@ -431,6 +421,11 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
+  },
+  contentInner: {
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
   },
   tabBar: {
     flexDirection: 'row',

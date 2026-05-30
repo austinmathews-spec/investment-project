@@ -11,13 +11,15 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { v4 as uuidv4 } from 'uuid';
+import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { Goal, AppData } from '../types';
 import { loadAppData, saveGoal, deleteGoal } from '../storage';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, formatCurrencyDecimal, accountTypeLabel } from '../utils/format';
 import Card from '../components/Card';
 import ProgressBar from '../components/ProgressBar';
 import InputField from '../components/InputField';
+import FilterChips from '../components/FilterChips';
 
 const GOAL_COLORS = Colors.goalColors;
 
@@ -30,6 +32,8 @@ export default function GoalsScreen() {
   const [currentAmount, setCurrentAmount] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [selectedColor, setSelectedColor] = useState(GOAL_COLORS[0]);
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [linkedAccountIds, setLinkedAccountIds] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
     const appData = await loadAppData();
@@ -49,6 +53,7 @@ export default function GoalsScreen() {
     setCurrentAmount('0');
     setTargetDate('2027-12-31');
     setSelectedColor(GOAL_COLORS[(data?.goals.length ?? 0) % GOAL_COLORS.length]);
+    setLinkedAccountIds([]);
     setModalVisible(true);
   };
 
@@ -59,6 +64,7 @@ export default function GoalsScreen() {
     setCurrentAmount(goal.currentAmount.toString());
     setTargetDate(goal.targetDate);
     setSelectedColor(goal.color);
+    setLinkedAccountIds(goal.linkedAccountIds || []);
     setModalVisible(true);
   };
 
@@ -75,6 +81,7 @@ export default function GoalsScreen() {
       currentAmount: parseFloat(currentAmount) || 0,
       targetDate: targetDate || '2027-12-31',
       color: selectedColor,
+      linkedAccountIds: linkedAccountIds.length > 0 ? linkedAccountIds : undefined,
     };
     const updated = await saveGoal(goal);
     setData(updated);
@@ -98,13 +105,31 @@ export default function GoalsScreen() {
 
   if (!data) return null;
 
+  const getGoalCurrent = (goal: Goal): number => {
+    if (goal.linkedAccountIds && goal.linkedAccountIds.length > 0) {
+      return data.accounts
+        .filter(a => goal.linkedAccountIds!.includes(a.id))
+        .reduce((sum, a) => sum + a.balance, 0);
+    }
+    return goal.currentAmount;
+  };
+
   const totalGoalTarget = data.goals.reduce((sum, g) => sum + g.targetAmount, 0);
-  const totalGoalCurrent = data.goals.reduce((sum, g) => sum + g.currentAmount, 0);
+  const totalGoalCurrent = data.goals.reduce((sum, g) => sum + getGoalCurrent(g), 0);
   const overallProgress = totalGoalTarget > 0 ? totalGoalCurrent / totalGoalTarget : 0;
+
+  const toggleAccount = (accountId: string) => {
+    setLinkedAccountIds(prev =>
+      prev.includes(accountId)
+        ? prev.filter(id => id !== accountId)
+        : [...prev, accountId]
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
+        <View style={styles.contentInner}>
         {/* Summary */}
         <View style={styles.header}>
           <Text style={styles.headerLabel}>Your Goals</Text>
@@ -117,11 +142,27 @@ export default function GoalsScreen() {
           <Text style={styles.overallPercent}>{(overallProgress * 100).toFixed(0)}% overall</Text>
         </View>
 
+        {/* Filter */}
+        <FilterChips
+          options={['All', 'In Progress', 'Completed']}
+          selected={statusFilter}
+          onSelect={setStatusFilter}
+        />
+
         {/* Goal Cards */}
-        {data.goals.map((goal) => {
-          const progress = goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
-          const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+        {data.goals.filter((goal) => {
+          if (statusFilter === 'All') return true;
+          const cur = getGoalCurrent(goal);
+          const progress = goal.targetAmount > 0 ? cur / goal.targetAmount : 0;
+          return statusFilter === 'Completed' ? progress >= 1 : progress < 1;
+        }).map((goal) => {
+          const goalCurrent = getGoalCurrent(goal);
+          const progress = goal.targetAmount > 0 ? goalCurrent / goal.targetAmount : 0;
+          const remaining = Math.max(0, goal.targetAmount - goalCurrent);
           const targetDate = new Date(goal.targetDate);
+          const linkedAccounts = goal.linkedAccountIds
+            ? data.accounts.filter(a => goal.linkedAccountIds!.includes(a.id))
+            : [];
           const now = new Date();
           const monthsLeft = Math.max(
             0,
@@ -142,11 +183,22 @@ export default function GoalsScreen() {
                 </View>
 
                 <View style={styles.goalAmounts}>
-                  <Text style={styles.goalCurrent}>{formatCurrency(goal.currentAmount)}</Text>
+                  <Text style={styles.goalCurrent}>{formatCurrency(goalCurrent)}</Text>
                   <Text style={styles.goalTarget}> of {formatCurrency(goal.targetAmount)}</Text>
                 </View>
 
-                <ProgressBar progress={progress} color={goal.color} height={8} />
+                <ProgressBar progress={Math.min(progress, 1)} color={goal.color} height={8} />
+
+                {linkedAccounts.length > 0 && (
+                  <View style={styles.linkedAccountsList}>
+                    {linkedAccounts.map(a => (
+                      <View key={a.id} style={styles.linkedAccountRow}>
+                        <Text style={styles.linkedAccountName}>{a.name}</Text>
+                        <Text style={styles.linkedAccountBalance}>{formatCurrencyDecimal(a.balance)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
                 <View style={styles.goalFooter}>
                   <Text style={styles.goalFooterText}>
@@ -176,6 +228,7 @@ export default function GoalsScreen() {
         <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
           <Text style={styles.addBtnText}>+ Add New Goal</Text>
         </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Add/Edit Modal */}
@@ -193,12 +246,47 @@ export default function GoalsScreen() {
               keyboardType="decimal-pad"
             />
             <InputField
-              label="Current Amount ($)"
-              value={currentAmount}
-              onChangeText={setCurrentAmount}
+              label={linkedAccountIds.length > 0 ? 'Current (auto from accounts)' : 'Current Amount ($)'}
+              value={linkedAccountIds.length > 0
+                ? formatCurrencyDecimal(data.accounts.filter(a => linkedAccountIds.includes(a.id)).reduce((s, a) => s + a.balance, 0))
+                : currentAmount
+              }
+              onChangeText={linkedAccountIds.length > 0 ? () => {} : setCurrentAmount}
               placeholder="0"
               keyboardType="decimal-pad"
+              editable={linkedAccountIds.length === 0}
             />
+
+            {/* Link Accounts */}
+            <Text style={styles.colorLabel}>Link Accounts (optional)</Text>
+            <Text style={styles.accountPickerHint}>Select accounts to auto-track progress from balances</Text>
+            <ScrollView style={styles.accountPickerList} nestedScrollEnabled>
+              {data.accounts.map(account => {
+                const isLinked = linkedAccountIds.includes(account.id);
+                return (
+                  <TouchableOpacity
+                    key={account.id}
+                    style={[styles.accountPickerItem, isLinked && styles.accountPickerItemActive]}
+                    onPress={() => toggleAccount(account.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.accountPickerLeft}>
+                      <View style={[styles.accountPickerCheck, isLinked && styles.accountPickerCheckActive]}>
+                        {isLinked && <Feather name="check" size={12} color="#FFF" />}
+                      </View>
+                      <View>
+                        <Text style={styles.accountPickerName}>{account.name}</Text>
+                        <Text style={styles.accountPickerMeta}>
+                          {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
             <InputField
               label="Target Date (YYYY-MM-DD)"
               value={targetDate}
@@ -246,9 +334,14 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
+  contentInner: {
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
+  },
   header: {
     alignItems: 'center',
-    paddingVertical: Spacing.xl,
+    paddingVertical: Spacing.lg,
   },
   headerLabel: {
     color: Colors.textPrimary,
@@ -356,7 +449,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.xl,
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
-    maxHeight: '85%',
+    maxHeight: '90%',
   },
   modalTitle: {
     color: Colors.textPrimary,
@@ -413,5 +506,81 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: FontSizes.md,
     fontWeight: '700',
+  },
+  linkedAccountsList: {
+    marginTop: Spacing.sm,
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+  },
+  linkedAccountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  linkedAccountName: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.xs,
+  },
+  linkedAccountBalance: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
+  },
+  accountPickerHint: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginBottom: Spacing.sm,
+  },
+  accountPickerList: {
+    maxHeight: 180,
+    marginBottom: Spacing.md,
+  },
+  accountPickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginBottom: 4,
+    backgroundColor: Colors.tileBg,
+  },
+  accountPickerItemActive: {
+    backgroundColor: Colors.accentDim,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+  },
+  accountPickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  accountPickerCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    marginRight: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountPickerCheckActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  accountPickerName: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.sm,
+    fontWeight: '500',
+  },
+  accountPickerMeta: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+  },
+  accountPickerBalance: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
   },
 });
