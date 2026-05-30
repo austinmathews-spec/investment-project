@@ -1,0 +1,469 @@
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Dimensions,
+  RefreshControl,
+  TouchableOpacity,
+} from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
+import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
+import { AppData } from '../types';
+import { loadAppData, syncWithAirtable, loadAirtableConfig } from '../storage';
+import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
+import LargeChart from '../components/LargeChart';
+import ProgressBar from '../components/ProgressBar';
+
+const { width: screenWidth } = Dimensions.get('window');
+
+export default function DashboardScreen() {
+  const [data, setData] = useState<AppData | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const navigation = useNavigation<any>();
+
+  const loadData = useCallback(async () => {
+    const config = await loadAirtableConfig();
+    let appData: AppData;
+    if (config && config.pat && config.baseId) {
+      try {
+        appData = await syncWithAirtable();
+      } catch {
+        appData = await loadAppData();
+      }
+    } else {
+      appData = await loadAppData();
+    }
+    setData(appData);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  if (!data) return null;
+
+  const totalBalance = data.accounts.reduce((sum, a) => sum + a.balance, 0);
+  const prevSnapshot = data.snapshots.length > 1 ? data.snapshots[data.snapshots.length - 2] : null;
+  const netChange = prevSnapshot ? totalBalance - prevSnapshot.netWorth : 0;
+  const netChangePercent = prevSnapshot && prevSnapshot.netWorth > 0 ? netChange / prevSnapshot.netWorth : 0;
+  const isPositive = netChange >= 0;
+
+  const chartData = data.snapshots.map((s) => ({
+    label: formatDate(s.date),
+    value: s.netWorth,
+  }));
+
+  // Group accounts by type for allocation
+  const accountsByType = data.accounts.reduce<Record<string, number>>((acc, a) => {
+    const label = accountTypeLabel(a.type);
+    acc[label] = (acc[label] || 0) + a.balance;
+    return acc;
+  }, {});
+  const sortedTypes = Object.entries(accountsByType).sort((a, b) => b[1] - a[1]);
+
+  const navigateToAccount = (accountId: string, accountName: string) => {
+    navigation.navigate('AccountDetail', { accountId, accountName });
+  };
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
+    >
+      {/* Net Worth Hero */}
+      <View style={styles.heroSection}>
+        <Text style={styles.heroLabel}>Net Worth</Text>
+        <Text style={styles.heroAmount}>{formatCurrencyDecimal(totalBalance)}</Text>
+        {prevSnapshot && (
+          <View style={styles.changeRow}>
+            <View style={[styles.changeBadge, { backgroundColor: isPositive ? Colors.accentDim : 'rgba(255,80,0,0.08)' }]}>
+              <Feather
+                name={isPositive ? 'trending-up' : 'trending-down'}
+                size={14}
+                color={isPositive ? Colors.positive : Colors.negative}
+              />
+              <Text style={[styles.changeText, { color: isPositive ? Colors.positive : Colors.negative }]}>
+                {isPositive ? '+' : ''}{formatCurrency(netChange)} ({isPositive ? '+' : ''}{(netChangePercent * 100).toFixed(1)}%)
+              </Text>
+            </View>
+            <Text style={styles.changePeriod}>since {formatDate(prevSnapshot.date)}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Net Worth Chart */}
+      {chartData.length >= 2 && (
+        <View style={styles.chartContainer}>
+          <LargeChart
+            data={chartData}
+            width={screenWidth - 40}
+            height={200}
+            color={Colors.accent}
+          />
+        </View>
+      )}
+
+      {/* Allocation Breakdown */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Allocation</Text>
+        <View style={styles.allocationBar}>
+          {sortedTypes.map(([label, balance], i) => {
+            const pct = totalBalance > 0 ? (balance / totalBalance) * 100 : 0;
+            if (pct < 1) return null;
+            return (
+              <View
+                key={label}
+                style={{
+                  width: `${pct}%`,
+                  height: 6,
+                  backgroundColor: Colors.goalColors[i % Colors.goalColors.length],
+                  borderRadius: i === 0 ? 3 : 0,
+                  borderTopRightRadius: i === sortedTypes.length - 1 ? 3 : 0,
+                  borderBottomRightRadius: i === sortedTypes.length - 1 ? 3 : 0,
+                }}
+              />
+            );
+          })}
+        </View>
+        <View style={styles.allocationGrid}>
+          {sortedTypes.map(([label, balance], i) => (
+            <View key={label} style={styles.allocationItem}>
+              <View style={styles.allocationLabelRow}>
+                <View style={[styles.dot, { backgroundColor: Colors.goalColors[i % Colors.goalColors.length] }]} />
+                <Text style={styles.allocationLabel}>{label}</Text>
+              </View>
+              <Text style={styles.allocationAmount}>{formatCurrency(balance)}</Text>
+              <Text style={styles.allocationPct}>
+                {totalBalance > 0 ? ((balance / totalBalance) * 100).toFixed(1) : '0'}%
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Account Tiles */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Accounts</Text>
+        {data.accounts.map((account) => (
+          <TouchableOpacity
+            key={account.id}
+            style={styles.accountTile}
+            activeOpacity={0.6}
+            onPress={() => navigateToAccount(account.id, account.name)}
+          >
+            <View style={styles.accountTileLeft}>
+              <View style={styles.accountIcon}>
+                <Feather
+                  name={
+                    account.type === 'crypto' ? 'activity' :
+                    account.type === 'real_estate' ? 'home' :
+                    account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
+                    account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
+                    'credit-card'
+                  }
+                  size={18}
+                  color={Colors.accent}
+                />
+              </View>
+              <View>
+                <Text style={styles.accountTileName}>{account.name}</Text>
+                <Text style={styles.accountTileMeta}>
+                  {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.accountTileRight}>
+              <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
+                {formatCurrencyDecimal(account.balance)}
+              </Text>
+              <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Monthly Expenses */}
+      {data.expenses && data.expenses.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Monthly Expenses</Text>
+          {data.expenses.map((expense) => (
+            <View key={expense.id} style={styles.expenseRow}>
+              <View>
+                <Text style={styles.expenseName}>{expense.name}</Text>
+                <Text style={styles.expenseMeta}>
+                  {expense.category} · {expense.frequency}
+                </Text>
+              </View>
+              <Text style={styles.expenseAmount}>
+                -{formatCurrency(expense.effectiveAmount)}/mo
+              </Text>
+            </View>
+          ))}
+          <View style={styles.expenseTotalRow}>
+            <Text style={styles.expenseTotalLabel}>Total Monthly</Text>
+            <Text style={styles.expenseTotalAmount}>
+              -{formatCurrency(data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0))}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Goals Quick View */}
+      {data.goals.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Goals</Text>
+          {data.goals.map((goal) => {
+            const progress = goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
+            return (
+              <View key={goal.id} style={styles.goalTile}>
+                <View style={styles.goalHeader}>
+                  <Text style={styles.goalName}>{goal.name}</Text>
+                  <Text style={styles.goalPercent}>{(progress * 100).toFixed(0)}%</Text>
+                </View>
+                <ProgressBar progress={progress} color={goal.color} height={6} />
+                <View style={styles.goalFooter}>
+                  <Text style={styles.goalFooterText}>
+                    {formatCurrency(goal.currentAmount)} of {formatCurrency(goal.targetAmount)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  content: {
+    paddingBottom: Spacing.xxl,
+  },
+  heroSection: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  heroLabel: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    fontWeight: '500',
+  },
+  heroAmount: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.hero,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginTop: 2,
+  },
+  changeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  changeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.round,
+    gap: 4,
+  },
+  changeText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
+  },
+  changePeriod: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.sm,
+  },
+  chartContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  section: {
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.xl,
+  },
+  sectionTitle: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    marginBottom: Spacing.md,
+  },
+  // Allocation
+  allocationBar: {
+    flexDirection: 'row',
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
+  },
+  allocationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  allocationItem: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    width: '48%',
+    minWidth: 140,
+  },
+  allocationLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: Spacing.sm,
+  },
+  allocationLabel: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    fontWeight: '500',
+  },
+  allocationAmount: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+  },
+  allocationPct: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  // Account Tiles
+  accountTile: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  accountTileLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  accountIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.accentDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  accountTileName: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  accountTileMeta: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  accountTileRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  accountTileBalance: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  // Expenses
+  expenseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  expenseName: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '500',
+  },
+  expenseMeta: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  expenseAmount: {
+    color: Colors.negative,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  expenseTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: Spacing.md,
+  },
+  expenseTotalLabel: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  expenseTotalAmount: {
+    color: Colors.negative,
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+  },
+  // Goals
+  goalTile: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  goalName: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  goalPercent: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  goalFooter: {
+    marginTop: Spacing.xs,
+  },
+  goalFooterText: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+  },
+});
