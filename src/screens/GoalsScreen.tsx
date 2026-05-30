@@ -64,7 +64,8 @@ export default function GoalsScreen() {
 
   const handleSave = async () => {
     if (!name.trim() || !targetAmount.trim()) {
-      Alert.alert('Error', 'Name and target amount are required');
+      const msg = 'Name and target amount are required';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
       return;
     }
     const goal: Goal = {
