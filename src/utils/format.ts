@@ -42,6 +42,7 @@ export function accountTypeLabel(type: string): string {
     '529': '529 Plan',
     crypto: 'Crypto',
     real_estate: 'Real Estate',
+    vehicle: 'Vehicle',
     other: 'Other',
   };
   return labels[type] || type;
@@ -59,7 +60,34 @@ export function accountTypeIcon(type: string): string {
     '529': 'book',
     crypto: 'zap',
     real_estate: 'home',
+    vehicle: 'truck',
     other: 'folder',
   };
   return icons[type] || 'folder';
+}
+
+const USER_DOB = new Date(1998, 8, 8); // Sept 8, 1998
+
+export function ageFromDate(dateStr: string): number {
+  const d = new Date(dateStr);
+  let age = d.getFullYear() - USER_DOB.getFullYear();
+  const m = d.getMonth() - USER_DOB.getMonth();
+  if (m < 0 || (m === 0 && d.getDate() < USER_DOB.getDate())) age--;
+  return age;
+}
+
+export function yearFromAge(age: number): number {
+  return USER_DOB.getFullYear() + age;
+}
+
+export function dateFromAge(age: number): string {
+  const year = USER_DOB.getFullYear() + age;
+  const month = String(USER_DOB.getMonth() + 1).padStart(2, '0');
+  const day = String(USER_DOB.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function formatAgeYear(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `Age ${ageFromDate(dateStr)} · ${d.getFullYear()}`;
 }

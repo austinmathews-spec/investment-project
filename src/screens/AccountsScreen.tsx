@@ -15,8 +15,9 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { Account, AccountType, AppData } from '../types';
 import { loadAppData, saveAccount, deleteAccount, saveSnapshot } from '../storage';
-import { formatCurrencyDecimal, accountTypeLabel } from '../utils/format';
+import { formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
 import InputField from '../components/InputField';
+import FilterChips from '../components/FilterChips';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'checking', label: 'Checking' },
@@ -29,6 +30,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: '529', label: '529 Plan' },
   { value: 'crypto', label: 'Crypto' },
   { value: 'real_estate', label: 'Real Estate' },
+  { value: 'vehicle', label: 'Vehicle' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -41,6 +43,8 @@ export default function AccountsScreen() {
   const [balance, setBalance] = useState('');
   const [institution, setInstitution] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState('Excl. Non-Cash');
+  const [typeFilter, setTypeFilter] = useState('All');
   const navigation = useNavigation<any>();
 
   const loadData = useCallback(async () => {
@@ -76,6 +80,7 @@ export default function AccountsScreen() {
       balance: parseFloat(balance) || 0,
       institution: institution.trim(),
       lastUpdated: new Date().toISOString().split('T')[0],
+      sourceTable: editingAccount?.sourceTable || 'Local',
     };
     const updated = await saveAccount(account);
     setData(updated);
@@ -109,7 +114,8 @@ export default function AccountsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
+        <View style={styles.contentInner}>
         {/* Total */}
         <View style={styles.totalSection}>
           <Text style={styles.totalLabel}>Total Balance</Text>
@@ -125,8 +131,34 @@ export default function AccountsScreen() {
           <Text style={styles.snapshotBtnText}>Save Snapshot</Text>
         </TouchableOpacity>
 
+        {/* Filters */}
+        <FilterChips
+          options={['All', 'Excl. Non-Cash', ...Array.from(new Set(data.accounts.map(a => a.sourceTable)))]}
+          selected={sourceFilter}
+          onSelect={setSourceFilter}
+        />
+        <FilterChips
+          options={['All', ...Array.from(new Set(
+            (sourceFilter === 'All'
+              ? data.accounts
+              : sourceFilter === 'Excl. Non-Cash'
+              ? data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets')
+              : data.accounts.filter(a => a.sourceTable === sourceFilter)
+            ).map(a => accountTypeLabel(a.type))
+          ))]}
+          selected={typeFilter}
+          onSelect={setTypeFilter}
+        />
+
         {/* Account Tiles */}
-        {data.accounts.map((account) => (
+        {data.accounts
+          .filter(a => {
+            if (sourceFilter === 'Excl. Non-Cash' && a.sourceTable === 'Non-Cash Assets') return false;
+            if (sourceFilter !== 'All' && sourceFilter !== 'Excl. Non-Cash' && a.sourceTable !== sourceFilter) return false;
+            if (typeFilter !== 'All' && accountTypeLabel(a.type) !== typeFilter) return false;
+            return true;
+          })
+          .map((account) => (
           <TouchableOpacity
             key={account.id}
             style={styles.accountTile}
@@ -139,6 +171,7 @@ export default function AccountsScreen() {
                   name={
                     account.type === 'crypto' ? 'activity' :
                     account.type === 'real_estate' ? 'home' :
+                    account.type === 'vehicle' ? 'truck' :
                     account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
                     account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
                     'credit-card'
@@ -151,6 +184,7 @@ export default function AccountsScreen() {
                 <Text style={styles.accountTileName}>{account.name}</Text>
                 <Text style={styles.accountTileMeta}>
                   {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                  {account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
                 </Text>
               </View>
             </View>
@@ -162,6 +196,7 @@ export default function AccountsScreen() {
             </View>
           </TouchableOpacity>
         ))}
+        </View>
       </ScrollView>
 
       {/* FAB */}
@@ -239,9 +274,14 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: 100,
   },
+  contentInner: {
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
+  },
   totalSection: {
     alignItems: 'center',
-    paddingVertical: Spacing.xl,
+    paddingVertical: Spacing.lg,
   },
   totalLabel: {
     color: Colors.textSecondary,

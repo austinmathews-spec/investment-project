@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, useWindowDimensions } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -81,6 +82,9 @@ function AccountsStackScreen() {
 }
 
 export default function AppNavigator() {
+  const { width: screenWidth } = useWindowDimensions();
+  const isDesktop = screenWidth >= 768;
+
   return (
     <NavigationContainer>
       <Tab.Navigator
@@ -95,8 +99,8 @@ export default function AppNavigator() {
             backgroundColor: Colors.tabBarBackground,
             borderTopColor: Colors.border,
             borderTopWidth: 0.5,
-            height: 80,
-            paddingBottom: Spacing.md,
+            height: isDesktop ? 56 : 80,
+            paddingBottom: isDesktop ? Spacing.sm : Spacing.md,
             paddingTop: Spacing.sm,
           },
           tabBarLabelStyle: {

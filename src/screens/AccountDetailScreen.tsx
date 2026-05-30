@@ -30,6 +30,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: '529', label: '529 Plan' },
   { value: 'crypto', label: 'Crypto' },
   { value: 'real_estate', label: 'Real Estate' },
+  { value: 'vehicle', label: 'Vehicle' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -124,7 +125,8 @@ export default function AccountDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
+        <View style={styles.contentInner}>
         {/* Hero */}
         <View style={styles.hero}>
           <Text style={[styles.heroBalance, account.balance < 0 && { color: Colors.negative }]}>
@@ -228,6 +230,7 @@ export default function AccountDetailScreen() {
             })}
           </View>
         )}
+        </View>
       </ScrollView>
 
       {/* Edit Modal */}
@@ -293,9 +296,14 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: Spacing.xxl,
   },
+  contentInner: {
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
+  },
   hero: {
     alignItems: 'center',
-    paddingVertical: Spacing.xl,
+    paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.lg,
   },
   heroBalance: {

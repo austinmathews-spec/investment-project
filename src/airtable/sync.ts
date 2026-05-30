@@ -2,6 +2,7 @@ import { listRecords, createRecord, updateRecord } from './client';
 import {
   Account,
   AccountType,
+  SourceTable,
   NetWorthSnapshot,
   RecurringExpense,
   ExpenseFrequency,
@@ -114,6 +115,16 @@ function getCurrencyColumns(
   return Array.from(cols);
 }
 
+const VEHICLE_KEYWORDS = ['car', 'vehicle', 'auto', 'truck', 'motorcycle'];
+
+function inferNonCashType(columnName: string, knownType?: AccountType): AccountType {
+  if (knownType) return knownType;
+  const lower = columnName.toLowerCase();
+  if (VEHICLE_KEYWORDS.some(kw => lower.includes(kw))) return 'vehicle';
+  if (lower.includes('rsu') || lower.includes('stock') || lower.includes('equity')) return 'other';
+  return 'real_estate';
+}
+
 export function parseAccounts(
   savingsRecords: AirtableRecord[],
   nonCashRecords: AirtableRecord[],
@@ -139,6 +150,7 @@ export function parseAccounts(
         balance,
         institution: col.institution,
         lastUpdated: latest.fields.Date as string,
+        sourceTable: 'Savings & Investment',
       });
     }
   }
@@ -156,13 +168,15 @@ export function parseAccounts(
     for (const colName of nonCashCols) {
       const known = NON_CASH_KNOWN.find((k) => k.fieldName === colName);
       const balance = (latestNonCash.fields[colName] as number) ?? 0;
+      const inferredType = inferNonCashType(colName, known?.type);
       accounts.push({
         id: fieldToId(colName, 'nonCash'),
         name: known?.accountName ?? colName,
-        type: known?.type ?? 'real_estate',
+        type: inferredType,
         balance,
         institution: known?.institution ?? '',
         lastUpdated: latestNonCash.fields.Date as string,
+        sourceTable: 'Non-Cash Assets',
       });
     }
   }
@@ -187,6 +201,7 @@ export function parseAccounts(
           balance,
           institution: '',
           lastUpdated: latestDebt.fields.Date as string,
+          sourceTable: 'Debt',
         });
       }
     }

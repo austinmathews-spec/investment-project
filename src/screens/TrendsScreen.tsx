@@ -7,10 +7,12 @@ import { AppData } from '../types';
 import { loadAppData } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate } from '../utils/format';
 import LargeChart from '../components/LargeChart';
+import FilterChips from '../components/FilterChips';
 
 export default function TrendsScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const [data, setData] = useState<AppData | null>(null);
+  const [dateRange, setDateRange] = useState('All Time');
 
   useFocusEffect(
     useCallback(() => {
@@ -20,7 +22,21 @@ export default function TrendsScreen() {
 
   if (!data) return null;
 
-  const snapshots = data.snapshots;
+  const allSnapshots = data.snapshots;
+
+  const dateRangeOptions = ['All Time', '6 Months', '1 Year', '2 Years'];
+  const now = new Date();
+  const filterDate = (range: string): Date => {
+    const d = new Date(now);
+    if (range === '6 Months') d.setMonth(d.getMonth() - 6);
+    else if (range === '1 Year') d.setFullYear(d.getFullYear() - 1);
+    else if (range === '2 Years') d.setFullYear(d.getFullYear() - 2);
+    else return new Date(0);
+    return d;
+  };
+  const cutoff = filterDate(dateRange);
+  const snapshots = allSnapshots.filter(s => new Date(s.date) >= cutoff);
+
   const chartData = snapshots.map((s) => ({
     label: formatDate(s.date),
     value: s.netWorth,
@@ -39,8 +55,12 @@ export default function TrendsScreen() {
     return { snapshot: s, prev, change, changePct };
   });
 
+  const contentMaxWidth = 960;
+  const chartWidthClamped = Math.min(Math.min(screenWidth, contentMaxWidth) - 40, 800);
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
+      <View style={[styles.contentInner, { maxWidth: contentMaxWidth, width: '100%' }]}>
       {/* Hero */}
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>Net Worth Trends</Text>
@@ -64,12 +84,15 @@ export default function TrendsScreen() {
         )}
       </View>
 
+      {/* Date Range Filter */}
+      <FilterChips options={dateRangeOptions} selected={dateRange} onSelect={setDateRange} />
+
       {/* Chart */}
       {chartData.length >= 2 && (
         <View style={styles.chartContainer}>
           <LargeChart
             data={chartData}
-            width={Math.min(screenWidth - 40, 800)}
+            width={chartWidthClamped}
             height={220}
             color={Colors.accent}
           />
@@ -109,6 +132,7 @@ export default function TrendsScreen() {
           </View>
         )}
       </View>
+      </View>
     </ScrollView>
   );
 }
@@ -121,10 +145,13 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: Spacing.xxl,
   },
+  contentInner: {
+    alignSelf: 'center',
+  },
   hero: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs,
   },
   heroLabel: {
     color: Colors.textSecondary,

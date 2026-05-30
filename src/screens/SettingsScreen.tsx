@@ -121,8 +121,9 @@ export default function SettingsScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { alignItems: 'center' }]}
     >
+      <View style={styles.contentInner}>
       <Text style={styles.title}>Airtable Connection</Text>
       <Text style={styles.subtitle}>
         Connect to your Airtable base to sync accounts, snapshots, and expenses.
@@ -222,6 +223,7 @@ export default function SettingsScreen() {
           Goals, retirement scenarios, and forecasts are stored locally.
         </Text>
       </Card>
+      </View>
     </ScrollView>
   );
 }
@@ -234,6 +236,11 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
+  },
+  contentInner: {
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
     fontSize: FontSizes.xl,
