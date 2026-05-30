@@ -158,6 +158,15 @@ export async function deleteGoal(goalId: string): Promise<AppData> {
   return data;
 }
 
+export async function reorderGoals(orderedIds: string[]): Promise<AppData> {
+  const data = await loadAppData();
+  data.goals = data.goals
+    .map(g => ({ ...g, priority: orderedIds.indexOf(g.id) }))
+    .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+  await saveAppData(data);
+  return data;
+}
+
 // ─── Retirement scenario helpers ─────────────────────────────────
 
 export async function saveRetirementScenario(scenario: RetirementScenario): Promise<AppData> {

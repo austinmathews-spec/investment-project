@@ -41,6 +41,8 @@ export interface Goal {
   targetDate: string; // ISO date
   color: string;
   linkedAccountIds?: string[]; // when set, progress is auto-calculated from account balances
+  priority?: number; // lower = higher priority; used for waterfall ordering
+  milestoneReward?: string; // reward text when goal is reached
 }
 
 export interface RetirementScenario {

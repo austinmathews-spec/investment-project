@@ -6,27 +6,25 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  Switch,
   useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
-import { AppData } from '../types';
-import { loadAppData, syncWithAirtable, loadAirtableConfig } from '../storage';
-import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
-import { calculateFIRENumber } from '../utils/forecast';
+import { AppData, Goal } from '../types';
+import { loadAppData, syncWithAirtable, loadAirtableConfig, reorderGoals } from '../storage';
+import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel, formatAgeYear } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 import ProgressBar from '../components/ProgressBar';
-import FilterChips from '../components/FilterChips';
 
 export default function DashboardScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isDesktop = screenWidth >= 768;
   const [data, setData] = useState<AppData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [accountFilter, setAccountFilter] = useState('All');
-  const [sourceFilter, setSourceFilter] = useState('Excl. Non-Cash');
-  const [expenseFilter, setExpenseFilter] = useState('All');
+  const [includeNonCash, setIncludeNonCash] = useState(false);
+  const [expenseExpanded, setExpenseExpanded] = useState(false);
   const navigation = useNavigation<any>();
   const contentMaxWidth = 960;
   const contentWidth = Math.min(screenWidth, contentMaxWidth);
@@ -61,7 +59,12 @@ export default function DashboardScreen() {
 
   if (!data) return null;
 
-  const totalBalance = data.accounts.reduce((sum, a) => sum + a.balance, 0);
+  // Filter accounts based on non-cash toggle
+  const visibleAccounts = includeNonCash
+    ? data.accounts
+    : data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets');
+
+  const totalBalance = visibleAccounts.reduce((sum, a) => sum + a.balance, 0);
   const prevSnapshot = data.snapshots.length > 1 ? data.snapshots[data.snapshots.length - 2] : null;
   const netChange = prevSnapshot ? totalBalance - prevSnapshot.netWorth : 0;
   const netChangePercent = prevSnapshot && prevSnapshot.netWorth > 0 ? netChange / prevSnapshot.netWorth : 0;
@@ -72,45 +75,56 @@ export default function DashboardScreen() {
     value: s.netWorth,
   }));
 
-  // Group accounts by type for allocation
-  const accountsByType = data.accounts.reduce<Record<string, number>>((acc, a) => {
+  // Group visible accounts by type
+  const accountsByType: Record<string, typeof visibleAccounts> = {};
+  for (const a of visibleAccounts) {
     const label = accountTypeLabel(a.type);
-    acc[label] = (acc[label] || 0) + a.balance;
-    return acc;
-  }, {});
-  const sortedTypes = Object.entries(accountsByType).sort((a, b) => b[1] - a[1]);
+    if (!accountsByType[label]) accountsByType[label] = [];
+    accountsByType[label].push(a);
+  }
+  const sortedTypeGroups = Object.entries(accountsByType)
+    .map(([label, accounts]) => ({
+      label,
+      accounts,
+      total: accounts.reduce((s, a) => s + a.balance, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
 
-  // Financial insights
+  // Burn rate
   const totalMonthlyExpenses = data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0);
-  const annualExpenses = totalMonthlyExpenses * 12;
-  const fireNumber = calculateFIRENumber(annualExpenses);
-  const fireProgress = fireNumber > 0 ? Math.min(totalBalance / fireNumber, 1) : 0;
-
-  // Expense breakdown by category
   const expensesByCategory = data.expenses.reduce<Record<string, number>>((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.effectiveAmount;
     return acc;
   }, {});
   const sortedExpenseCategories = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]);
 
-  // Source table filter options
-  const sourceTableOptions = ['All', 'Excl. Non-Cash', ...Array.from(new Set(data.accounts.map(a => a.sourceTable)))];
-  const sourceFilteredAccounts = sourceFilter === 'All'
-    ? data.accounts
-    : sourceFilter === 'Excl. Non-Cash'
-    ? data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets')
-    : data.accounts.filter(a => a.sourceTable === sourceFilter);
+  // Goals sorted by priority
+  const sortedGoals = [...data.goals].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
 
-  // Account type filter options (applied after source filter)
-  const accountTypeOptions = ['All', ...Array.from(new Set(sourceFilteredAccounts.map(a => accountTypeLabel(a.type))))];
-  const filteredAccounts = accountFilter === 'All'
-    ? sourceFilteredAccounts
-    : sourceFilteredAccounts.filter(a => accountTypeLabel(a.type) === accountFilter);
+  const getGoalCurrent = (goal: Goal): number => {
+    if (goal.linkedAccountIds && goal.linkedAccountIds.length > 0) {
+      return data.accounts
+        .filter(a => goal.linkedAccountIds!.includes(a.id))
+        .reduce((sum, a) => sum + a.balance, 0);
+    }
+    return goal.currentAmount;
+  };
 
-  const expenseCategoryOptions = ['All', ...Array.from(new Set(data.expenses.map(e => e.category)))];
-  const filteredExpenses = expenseFilter === 'All'
-    ? data.expenses
-    : data.expenses.filter(e => e.category === expenseFilter);
+  const moveGoal = async (index: number, direction: -1 | 1) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= sortedGoals.length) return;
+    const reordered = [...sortedGoals];
+    const tmp = reordered[index];
+    reordered[index] = reordered[newIndex];
+    reordered[newIndex] = tmp;
+    const updated = await reorderGoals(reordered.map(g => g.id));
+    setData(updated);
+  };
+
+  // Emergency runway: based on Emergency HYS only
+  const emergencyAccount = data.accounts.find(a => a.name.toLowerCase().includes('emergency'));
+  const emergencyBalance = emergencyAccount ? emergencyAccount.balance : 0;
+  const emergencyRunwayMonths = totalMonthlyExpenses > 0 ? emergencyBalance / totalMonthlyExpenses : 0;
 
   // Data date (most recent snapshot or account update)
   const latestSnapshot = data.snapshots.length > 0 ? data.snapshots[data.snapshots.length - 1] : null;
@@ -163,186 +177,60 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {/* Allocation Breakdown */}
+      {/* Accounts grouped by type */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Allocation</Text>
-        <View style={styles.allocationBar}>
-          {sortedTypes.map(([label, balance], i) => {
-            const pct = totalBalance > 0 ? (balance / totalBalance) * 100 : 0;
-            if (pct < 1) return null;
-            return (
-              <View
-                key={label}
-                style={{
-                  width: `${pct}%`,
-                  height: 6,
-                  backgroundColor: Colors.goalColors[i % Colors.goalColors.length],
-                  borderRadius: i === 0 ? 3 : 0,
-                  borderTopRightRadius: i === sortedTypes.length - 1 ? 3 : 0,
-                  borderBottomRightRadius: i === sortedTypes.length - 1 ? 3 : 0,
-                }}
-              />
-            );
-          })}
-        </View>
-        <View style={styles.allocationGrid}>
-          {sortedTypes.map(([label, balance], i) => (
-            <View key={label} style={styles.allocationItem}>
-              <View style={styles.allocationLabelRow}>
-                <View style={[styles.dot, { backgroundColor: Colors.goalColors[i % Colors.goalColors.length] }]} />
-                <Text style={styles.allocationLabel}>{label}</Text>
-              </View>
-              <Text style={styles.allocationAmount}>{formatCurrency(balance)}</Text>
-              <Text style={styles.allocationPct}>
-                {totalBalance > 0 ? ((balance / totalBalance) * 100).toFixed(1) : '0'}%
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Financial Insights */}
-      {data.expenses.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Financial Insights</Text>
-
-          {/* FIRE Progress */}
-          <View style={styles.insightTile}>
-            <View style={styles.insightHeader}>
-              <View style={styles.insightLabelRow}>
-                <Feather name="target" size={16} color={Colors.accent} />
-                <Text style={styles.insightLabel}>FIRE Number</Text>
-              </View>
-              <Text style={styles.insightValue}>{formatCurrency(fireNumber)}</Text>
-            </View>
-            <ProgressBar progress={fireProgress} color={Colors.accent} height={6} />
-            <Text style={styles.insightSubtext}>
-              {(fireProgress * 100).toFixed(1)}% to financial independence (4% rule)
-            </Text>
+        <View style={styles.accountsSectionHeader}>
+          <Text style={styles.sectionTitle}>Accounts</Text>
+          <View style={styles.nonCashToggle}>
+            <Text style={styles.nonCashToggleLabel}>Non-Cash</Text>
+            <Switch
+              value={includeNonCash}
+              onValueChange={setIncludeNonCash}
+              trackColor={{ false: Colors.border, true: Colors.accent }}
+              thumbColor="#fff"
+            />
           </View>
-
-          {/* Monthly Expenses */}
-          <View style={styles.insightTile}>
-            <View style={styles.insightHeader}>
-              <View style={styles.insightLabelRow}>
-                <Feather name="credit-card" size={16} color={Colors.negative} />
-                <Text style={styles.insightLabel}>Monthly Expenses</Text>
-              </View>
-              <Text style={[styles.insightValue, { color: Colors.negative }]}>
-                -{formatCurrency(totalMonthlyExpenses)}
-              </Text>
+        </View>
+        {sortedTypeGroups.map((group) => (
+          <View key={group.label} style={styles.accountGroup}>
+            <View style={styles.accountGroupHeader}>
+              <Text style={styles.accountGroupTitle}>{group.label}</Text>
+              <Text style={styles.accountGroupTotal}>{formatCurrency(group.total)}</Text>
             </View>
-            {sortedExpenseCategories.map(([category, amount], i) => (
-              <View key={category} style={styles.categoryRow}>
-                <View style={styles.categoryLabelRow}>
-                  <View style={[styles.dot, { backgroundColor: Colors.goalColors[i % Colors.goalColors.length] }]} />
-                  <Text style={styles.categoryLabel}>{category}</Text>
+            {group.accounts.map((account) => (
+              <TouchableOpacity
+                key={account.id}
+                style={styles.accountTile}
+                activeOpacity={0.6}
+                onPress={() => navigateToAccount(account.id, account.name)}
+              >
+                <View style={styles.accountTileLeft}>
+                  <View>
+                    <Text style={styles.accountTileName}>{account.name}</Text>
+                    <Text style={styles.accountTileMeta}>
+                      {account.institution || ''}{account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.categoryAmount}>
-                  {formatCurrency(amount)}/mo ({totalMonthlyExpenses > 0 ? ((amount / totalMonthlyExpenses) * 100).toFixed(0) : 0}%)
-                </Text>
-              </View>
+                <View style={styles.accountTileRight}>
+                  <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
+                    {formatCurrencyDecimal(account.balance)}
+                  </Text>
+                  <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
-
-          {/* Annual Burn */}
-          <View style={styles.insightRow}>
-            <View style={styles.insightStat}>
-              <Text style={styles.insightStatLabel}>Annual Expenses</Text>
-              <Text style={styles.insightStatValue}>{formatCurrency(annualExpenses)}</Text>
-            </View>
-            <View style={styles.insightStat}>
-              <Text style={styles.insightStatLabel}>Runway</Text>
-              <Text style={styles.insightStatValue}>
-                {totalMonthlyExpenses > 0 ? (totalBalance / totalMonthlyExpenses).toFixed(0) : '∞'} mo
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Account Tiles */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Accounts</Text>
-        <FilterChips options={sourceTableOptions} selected={sourceFilter} onSelect={setSourceFilter} />
-        <FilterChips options={accountTypeOptions} selected={accountFilter} onSelect={setAccountFilter} />
-        {filteredAccounts.map((account) => (
-          <TouchableOpacity
-            key={account.id}
-            style={styles.accountTile}
-            activeOpacity={0.6}
-            onPress={() => navigateToAccount(account.id, account.name)}
-          >
-            <View style={styles.accountTileLeft}>
-              <View style={styles.accountIcon}>
-                <Feather
-                  name={
-                    account.type === 'crypto' ? 'activity' :
-                    account.type === 'real_estate' ? 'home' :
-                    account.type === 'vehicle' ? 'truck' :
-                    account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
-                    account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
-                    'credit-card'
-                  }
-                  size={18}
-                  color={Colors.accent}
-                />
-              </View>
-              <View>
-                <Text style={styles.accountTileName}>{account.name}</Text>
-                <Text style={styles.accountTileMeta}>
-                  {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
-                  {account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.accountTileRight}>
-              <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
-                {formatCurrencyDecimal(account.balance)}
-              </Text>
-              <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
-            </View>
-          </TouchableOpacity>
         ))}
       </View>
 
-      {/* Monthly Expenses */}
-      {data.expenses && data.expenses.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Monthly Expenses</Text>
-          <FilterChips options={expenseCategoryOptions} selected={expenseFilter} onSelect={setExpenseFilter} />
-          {filteredExpenses.map((expense) => (
-            <View key={expense.id} style={styles.expenseRow}>
-              <View>
-                <Text style={styles.expenseName}>{expense.name}</Text>
-                <Text style={styles.expenseMeta}>
-                  {expense.category} · {expense.frequency}
-                </Text>
-              </View>
-              <Text style={styles.expenseAmount}>
-                -{formatCurrency(expense.effectiveAmount)}/mo
-              </Text>
-            </View>
-          ))}
-          <View style={styles.expenseTotalRow}>
-            <Text style={styles.expenseTotalLabel}>{expenseFilter === 'All' ? 'Total Monthly' : `${expenseFilter} Total`}</Text>
-            <Text style={styles.expenseTotalAmount}>
-              -{formatCurrency(filteredExpenses.reduce((sum, e) => sum + e.effectiveAmount, 0))}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Goals Quick View */}
-      {data.goals.length > 0 && (
+      {/* Goals — tiered & prioritized */}
+      {sortedGoals.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Goals</Text>
-          {data.goals.map((goal) => {
-            const goalCurrent = goal.linkedAccountIds && goal.linkedAccountIds.length > 0
-              ? data.accounts
-                  .filter(a => goal.linkedAccountIds!.includes(a.id))
-                  .reduce((sum, a) => sum + a.balance, 0)
-              : goal.currentAmount;
+          <Text style={styles.goalSubtitle}>Reorder priority — contributions waterfall top-down</Text>
+          {sortedGoals.map((goal, index) => {
+            const goalCurrent = getGoalCurrent(goal);
             const progress = goal.targetAmount > 0 ? goalCurrent / goal.targetAmount : 0;
             const remaining = Math.max(0, goal.targetAmount - goalCurrent);
             const goalTargetDate = new Date(goal.targetDate);
@@ -353,11 +241,29 @@ export default function DashboardScreen() {
                 (goalTargetDate.getMonth() - nowDate.getMonth())
             );
             const monthlyNeeded = monthsLeft > 0 ? remaining / monthsLeft : 0;
-            const linkedAccounts = goal.linkedAccountIds
-              ? data.accounts.filter(a => goal.linkedAccountIds!.includes(a.id))
-              : [];
             return (
               <View key={goal.id} style={styles.goalTile}>
+                <View style={styles.goalRankRow}>
+                  <View style={styles.goalRankBadge}>
+                    <Text style={styles.goalRankText}>#{index + 1}</Text>
+                  </View>
+                  <View style={styles.goalRankArrows}>
+                    <TouchableOpacity
+                      onPress={() => moveGoal(index, -1)}
+                      disabled={index === 0}
+                      style={[styles.goalArrow, index === 0 && styles.goalArrowDisabled]}
+                    >
+                      <Feather name="chevron-up" size={18} color={index === 0 ? Colors.border : Colors.textSecondary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => moveGoal(index, 1)}
+                      disabled={index === sortedGoals.length - 1}
+                      style={[styles.goalArrow, index === sortedGoals.length - 1 && styles.goalArrowDisabled]}
+                    >
+                      <Feather name="chevron-down" size={18} color={index === sortedGoals.length - 1 ? Colors.border : Colors.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
                 <View style={styles.goalHeader}>
                   <Text style={styles.goalName}>{goal.name}</Text>
                   <Text style={styles.goalPercent}>{(Math.min(progress, 1) * 100).toFixed(0)}%</Text>
@@ -378,18 +284,88 @@ export default function DashboardScreen() {
                     </Text>
                   )}
                 </View>
-                {linkedAccounts.length > 0 && (
-                  <View style={styles.goalLinkedAccounts}>
-                    {linkedAccounts.map(a => (
-                      <Text key={a.id} style={styles.goalLinkedAccountText}>
-                        {a.name}: {formatCurrencyDecimal(a.balance)}
-                      </Text>
-                    ))}
+                <Text style={styles.goalFooterText}>{formatAgeYear(goal.targetDate)}</Text>
+                {goal.milestoneReward && (
+                  <View style={styles.rewardBadge}>
+                    <Feather name="gift" size={12} color={Colors.accent} />
+                    <Text style={styles.rewardText}>{goal.milestoneReward}</Text>
                   </View>
                 )}
               </View>
             );
           })}
+        </View>
+      )}
+
+      {/* Emergency Runway */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Emergency Runway</Text>
+        <View style={styles.runwayCard}>
+          <View style={styles.runwayTop}>
+            <View style={styles.runwayIconWrap}>
+              <Feather name="shield" size={22} color={emergencyRunwayMonths >= 6 ? Colors.positive : Colors.warning} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.runwayMonths}>
+                {emergencyRunwayMonths.toFixed(1)} months
+              </Text>
+              <Text style={styles.runwayHint}>
+                {emergencyRunwayMonths >= 6 ? 'On track' : emergencyRunwayMonths >= 3 ? 'Building' : 'Below target'}
+                {' · '}recommended 6 months
+              </Text>
+            </View>
+          </View>
+          <ProgressBar progress={Math.min(emergencyRunwayMonths / 6, 1)} color={emergencyRunwayMonths >= 6 ? Colors.positive : Colors.warning} height={6} />
+          <View style={styles.runwayDetails}>
+            <View style={styles.runwayDetail}>
+              <Text style={styles.runwayDetailLabel}>Emergency HYS</Text>
+              <Text style={styles.runwayDetailValue}>{formatCurrency(emergencyBalance)}</Text>
+            </View>
+            <View style={styles.runwayDetail}>
+              <Text style={styles.runwayDetailLabel}>Monthly Expenses</Text>
+              <Text style={styles.runwayDetailValue}>{formatCurrency(totalMonthlyExpenses)}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Expenses — collapsed burn rate */}
+      {data.expenses.length > 0 && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.burnRateCard}
+            activeOpacity={0.7}
+            onPress={() => setExpenseExpanded(!expenseExpanded)}
+          >
+            <View style={styles.burnRateLeft}>
+              <Feather name="repeat" size={18} color={Colors.negative} />
+              <View style={{ marginLeft: Spacing.sm }}>
+                <Text style={styles.burnRateLabel}>Expenses</Text>
+                <Text style={styles.burnRateRunway}>
+                  {formatCurrency(totalMonthlyExpenses)}/mo burn rate
+                </Text>
+              </View>
+            </View>
+            <View style={styles.burnRateRight}>
+              <Text style={styles.burnRateAmount}>-{formatCurrency(totalMonthlyExpenses)}</Text>
+              <Feather name={expenseExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textTertiary} />
+            </View>
+          </TouchableOpacity>
+          {expenseExpanded && (
+            <View style={styles.burnRateExpanded}>
+              {sortedExpenseCategories.map(([category, amount], i) => (
+                <View key={category} style={styles.categoryRow}>
+                  <View style={styles.categoryLabelRow}>
+                    <View style={[styles.dot, { backgroundColor: Colors.goalColors[i % Colors.goalColors.length] }]} />
+                    <Text style={styles.categoryLabel}>{category}</Text>
+                  </View>
+                  <Text style={styles.categoryAmount}>
+                    {formatCurrency(amount)}/mo ({totalMonthlyExpenses > 0 ? ((amount / totalMonthlyExpenses) * 100).toFixed(0) : 0}%)
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       )}
       </View>
@@ -466,105 +442,50 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: Spacing.sm,
   },
-  // Allocation
-  allocationBar: {
+  // Burn Rate
+  burnRateCard: {
     flexDirection: 'row',
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: Spacing.md,
-  },
-  allocationGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  allocationItem: {
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: Colors.tileBg,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
-    width: '48%',
-    minWidth: 140,
   },
-  allocationLabelRow: {
+  burnRateLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.xs,
+  },
+  burnRateLabel: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  burnRateRunway: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: 2,
+  },
+  burnRateRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  burnRateAmount: {
+    color: Colors.negative,
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+  },
+  burnRateExpanded: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     marginRight: Spacing.sm,
-  },
-  allocationLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-  },
-  allocationAmount: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-  },
-  allocationPct: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: 2,
-  },
-  // Financial Insights
-  insightTile: {
-    backgroundColor: Colors.tileBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  insightLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  insightLabel: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  insightValue: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-  },
-  insightSubtext: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: Spacing.xs,
-  },
-  insightRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  insightStat: {
-    flex: 1,
-    backgroundColor: Colors.tileBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-  },
-  insightStatLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-    fontWeight: '500',
-    marginBottom: Spacing.xs,
-  },
-  insightStatValue: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
   },
   categoryRow: {
     flexDirection: 'row',
@@ -585,34 +506,62 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     fontWeight: '500',
   },
-  // Account Tiles
+  // Accounts
+  accountsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  nonCashToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  nonCashToggleLabel: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.sm,
+  },
+  accountGroup: {
+    marginBottom: Spacing.md,
+  },
+  accountGroupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginBottom: Spacing.xs,
+  },
+  accountGroupTitle: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  accountGroupTotal: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
   accountTile: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.tileBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
   },
   accountTileLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  accountIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.accentDim,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
   accountTileName: {
     color: Colors.textPrimary,
     fontSize: FontSizes.md,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   accountTileMeta: {
     color: Colors.textTertiary,
@@ -627,53 +576,46 @@ const styles = StyleSheet.create({
   accountTileBalance: {
     color: Colors.textPrimary,
     fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
-  // Expenses
-  expenseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  expenseName: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '500',
-  },
-  expenseMeta: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: 2,
-  },
-  expenseAmount: {
-    color: Colors.negative,
-    fontSize: FontSizes.md,
     fontWeight: '600',
   },
-  expenseTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.md,
-  },
-  expenseTotalLabel: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
-  expenseTotalAmount: {
-    color: Colors.negative,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-  },
   // Goals
+  goalSubtitle: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginBottom: Spacing.md,
+  },
   goalTile: {
     backgroundColor: Colors.tileBg,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
+  },
+  goalRankRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  goalRankBadge: {
+    backgroundColor: Colors.accentDim,
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 2,
+  },
+  goalRankText: {
+    color: Colors.accent,
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+  },
+  goalRankArrows: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  goalArrow: {
+    padding: 2,
+  },
+  goalArrowDisabled: {
+    opacity: 0.3,
   },
   goalHeader: {
     flexDirection: 'row',
@@ -699,15 +641,71 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
   },
-  goalLinkedAccounts: {
+  rewardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.accentDim,
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
     marginTop: Spacing.xs,
-    paddingTop: Spacing.xs,
-    borderTopWidth: 0.5,
-    borderTopColor: Colors.border,
+    alignSelf: 'flex-start',
+    gap: 4,
   },
-  goalLinkedAccountText: {
+  rewardText: {
+    color: Colors.accent,
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
+  },
+  // Emergency Runway
+  runwayCard: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+  },
+  runwayTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  runwayIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.cardBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  runwayMonths: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+  },
+  runwayHint: {
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
-    paddingVertical: 1,
+    marginTop: 2,
+  },
+  runwayDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: Spacing.md,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  runwayDetail: {
+    alignItems: 'center',
+  },
+  runwayDetailLabel: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginBottom: 2,
+  },
+  runwayDetailValue: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
   },
 });

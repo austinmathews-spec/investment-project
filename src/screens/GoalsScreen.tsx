@@ -15,7 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { Goal, AppData } from '../types';
 import { loadAppData, saveGoal, deleteGoal } from '../storage';
-import { formatCurrency, formatCurrencyDecimal, accountTypeLabel } from '../utils/format';
+import { formatCurrency, formatCurrencyDecimal, accountTypeLabel, formatAgeYear } from '../utils/format';
 import Card from '../components/Card';
 import ProgressBar from '../components/ProgressBar';
 import InputField from '../components/InputField';
@@ -34,6 +34,7 @@ export default function GoalsScreen() {
   const [selectedColor, setSelectedColor] = useState(GOAL_COLORS[0]);
   const [statusFilter, setStatusFilter] = useState('All');
   const [linkedAccountIds, setLinkedAccountIds] = useState<string[]>([]);
+  const [milestoneReward, setMilestoneReward] = useState('');
 
   const loadData = useCallback(async () => {
     const appData = await loadAppData();
@@ -54,6 +55,7 @@ export default function GoalsScreen() {
     setTargetDate('2027-12-31');
     setSelectedColor(GOAL_COLORS[(data?.goals.length ?? 0) % GOAL_COLORS.length]);
     setLinkedAccountIds([]);
+    setMilestoneReward('');
     setModalVisible(true);
   };
 
@@ -65,6 +67,7 @@ export default function GoalsScreen() {
     setTargetDate(goal.targetDate);
     setSelectedColor(goal.color);
     setLinkedAccountIds(goal.linkedAccountIds || []);
+    setMilestoneReward(goal.milestoneReward || '');
     setModalVisible(true);
   };
 
@@ -82,6 +85,8 @@ export default function GoalsScreen() {
       targetDate: targetDate || '2027-12-31',
       color: selectedColor,
       linkedAccountIds: linkedAccountIds.length > 0 ? linkedAccountIds : undefined,
+      priority: editingGoal?.priority,
+      milestoneReward: milestoneReward.trim() || undefined,
     };
     const updated = await saveGoal(goal);
     setData(updated);
@@ -212,9 +217,16 @@ export default function GoalsScreen() {
                 </View>
 
                 <Text style={styles.goalDate}>
-                  Target: {targetDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  Target: {formatAgeYear(goal.targetDate)} · {targetDate.toLocaleDateString('en-US', { month: 'long' })}
                   {monthsLeft > 0 ? ` (${monthsLeft} months)` : ' (past due)'}
                 </Text>
+
+                {goal.milestoneReward && (
+                  <View style={styles.rewardBadge}>
+                    <Feather name="gift" size={14} color={Colors.accent} />
+                    <Text style={styles.rewardText}>{goal.milestoneReward}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.deleteLink} onPress={() => handleDelete(goal.id)}>
@@ -292,6 +304,13 @@ export default function GoalsScreen() {
               value={targetDate}
               onChangeText={setTargetDate}
               placeholder="2027-12-31"
+            />
+
+            <InputField
+              label="Milestone Reward (optional)"
+              value={milestoneReward}
+              onChangeText={setMilestoneReward}
+              placeholder="e.g. Buy a new watch, take a vacation"
             />
 
             {/* Color Picker */}
@@ -415,6 +434,22 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
     marginTop: Spacing.xs,
+  },
+  rewardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.accentDim,
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 4,
+    marginTop: Spacing.sm,
+    alignSelf: 'flex-start',
+    gap: Spacing.xs,
+  },
+  rewardText: {
+    color: Colors.accent,
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
   },
   deleteLink: {
     marginTop: Spacing.sm,
