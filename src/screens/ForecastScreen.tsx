@@ -106,8 +106,8 @@ export default function ForecastScreen() {
       retirementAge: parseInt(retRetireAge) || 60,
       currentSavings: parseFloat(retSavings) || 0,
       monthlyContribution: parseFloat(retMonthly) || 0,
-      annualReturnRate: (parseFloat(retReturn) || 7) / 100,
-      inflationRate: (parseFloat(retInflation) || 3) / 100,
+      annualReturnRate: (isNaN(parseFloat(retReturn)) ? 7 : parseFloat(retReturn)) / 100,
+      inflationRate: (isNaN(parseFloat(retInflation)) ? 3 : parseFloat(retInflation)) / 100,
       desiredAnnualIncome: parseFloat(retIncome) || 80000,
     };
     const updated = await saveRetirementScenario(scenario);
@@ -158,7 +158,7 @@ export default function ForecastScreen() {
       name: nwName.trim() || 'Net Worth Forecast',
       startingNetWorth: parseFloat(nwStarting) || 0,
       monthlySavings: parseFloat(nwMonthly) || 0,
-      annualReturnRate: (parseFloat(nwReturn) || 7) / 100,
+      annualReturnRate: (isNaN(parseFloat(nwReturn)) ? 7 : parseFloat(nwReturn)) / 100,
       years: parseInt(nwYears) || 10,
     };
     const updated = await saveForecastScenario(scenario);
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: {
-    color: Colors.background,
+    color: '#FFFFFF',
     fontSize: FontSizes.md,
     fontWeight: '700',
   },

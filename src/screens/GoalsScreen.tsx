@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
   },
   colorDotActive: {
     borderWidth: 3,
-    borderColor: Colors.white,
+    borderColor: Colors.textPrimary,
   },
   modalActions: {
     flexDirection: 'row',
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: {
-    color: Colors.background,
+    color: '#FFFFFF',
     fontSize: FontSizes.md,
     fontWeight: '700',
   },

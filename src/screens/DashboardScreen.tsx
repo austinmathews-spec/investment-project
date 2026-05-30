@@ -1,12 +1,19 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, RefreshControl } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Dimensions,
+  RefreshControl,
+  TouchableOpacity,
+} from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { AppData } from '../types';
 import { loadAppData, syncWithAirtable, loadAirtableConfig } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
-import Card from '../components/Card';
-import MiniChart from '../components/MiniChart';
 import LargeChart from '../components/LargeChart';
 import ProgressBar from '../components/ProgressBar';
 
@@ -15,6 +22,7 @@ const { width: screenWidth } = Dimensions.get('window');
 export default function DashboardScreen() {
   const [data, setData] = useState<AppData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const navigation = useNavigation<any>();
 
   const loadData = useCallback(async () => {
     const config = await loadAirtableConfig();
@@ -46,8 +54,6 @@ export default function DashboardScreen() {
   if (!data) return null;
 
   const totalBalance = data.accounts.reduce((sum, a) => sum + a.balance, 0);
-  const snapshotValues = data.snapshots.map((s) => s.netWorth);
-  const latestSnapshot = data.snapshots[data.snapshots.length - 1];
   const prevSnapshot = data.snapshots.length > 1 ? data.snapshots[data.snapshots.length - 2] : null;
   const netChange = prevSnapshot ? totalBalance - prevSnapshot.netWorth : 0;
   const netChangePercent = prevSnapshot && prevSnapshot.netWorth > 0 ? netChange / prevSnapshot.netWorth : 0;
@@ -58,14 +64,17 @@ export default function DashboardScreen() {
     value: s.netWorth,
   }));
 
-  // Group accounts by type
+  // Group accounts by type for allocation
   const accountsByType = data.accounts.reduce<Record<string, number>>((acc, a) => {
     const label = accountTypeLabel(a.type);
     acc[label] = (acc[label] || 0) + a.balance;
     return acc;
   }, {});
-
   const sortedTypes = Object.entries(accountsByType).sort((a, b) => b[1] - a[1]);
+
+  const navigateToAccount = (accountId: string, accountName: string) => {
+    navigation.navigate('AccountDetail', { accountId, accountName });
+  };
 
   return (
     <ScrollView
@@ -77,105 +86,163 @@ export default function DashboardScreen() {
       <View style={styles.heroSection}>
         <Text style={styles.heroLabel}>Net Worth</Text>
         <Text style={styles.heroAmount}>{formatCurrencyDecimal(totalBalance)}</Text>
-        <View style={styles.changeRow}>
-          <Text style={[styles.changeText, { color: isPositive ? Colors.positive : Colors.negative }]}>
-            {isPositive ? '+' : ''}{formatCurrency(netChange)}
-          </Text>
-          <Text style={[styles.changePercent, { color: isPositive ? Colors.positive : Colors.negative }]}>
-            {' '}({isPositive ? '+' : ''}{(netChangePercent * 100).toFixed(1)}%)
-          </Text>
-          {prevSnapshot && (
-            <Text style={styles.changePeriod}> since {formatDate(prevSnapshot.date)}</Text>
-          )}
-        </View>
+        {prevSnapshot && (
+          <View style={styles.changeRow}>
+            <View style={[styles.changeBadge, { backgroundColor: isPositive ? Colors.accentDim : 'rgba(255,80,0,0.08)' }]}>
+              <Feather
+                name={isPositive ? 'trending-up' : 'trending-down'}
+                size={14}
+                color={isPositive ? Colors.positive : Colors.negative}
+              />
+              <Text style={[styles.changeText, { color: isPositive ? Colors.positive : Colors.negative }]}>
+                {isPositive ? '+' : ''}{formatCurrency(netChange)} ({isPositive ? '+' : ''}{(netChangePercent * 100).toFixed(1)}%)
+              </Text>
+            </View>
+            <Text style={styles.changePeriod}>since {formatDate(prevSnapshot.date)}</Text>
+          </View>
+        )}
       </View>
 
       {/* Net Worth Chart */}
       {chartData.length >= 2 && (
-        <Card>
+        <View style={styles.chartContainer}>
           <LargeChart
             data={chartData}
-            width={screenWidth - 80}
-            height={180}
+            width={screenWidth - 40}
+            height={200}
             color={Colors.accent}
-            title="NET WORTH OVER TIME"
           />
-        </Card>
+        </View>
       )}
 
-      {/* Where Your Money Is */}
-      <Card>
-        <Text style={styles.sectionTitle}>Where Your Money Is</Text>
-        {sortedTypes.map(([label, balance], i) => (
-          <View key={label} style={styles.allocationRow}>
-            <View style={styles.allocationLeft}>
-              <View style={[styles.dot, { backgroundColor: Colors.goalColors[i % Colors.goalColors.length] }]} />
-              <Text style={styles.allocationLabel}>{label}</Text>
-            </View>
-            <View style={styles.allocationRight}>
+      {/* Allocation Breakdown */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Allocation</Text>
+        <View style={styles.allocationBar}>
+          {sortedTypes.map(([label, balance], i) => {
+            const pct = totalBalance > 0 ? (balance / totalBalance) * 100 : 0;
+            if (pct < 1) return null;
+            return (
+              <View
+                key={label}
+                style={{
+                  width: `${pct}%`,
+                  height: 6,
+                  backgroundColor: Colors.goalColors[i % Colors.goalColors.length],
+                  borderRadius: i === 0 ? 3 : 0,
+                  borderTopRightRadius: i === sortedTypes.length - 1 ? 3 : 0,
+                  borderBottomRightRadius: i === sortedTypes.length - 1 ? 3 : 0,
+                }}
+              />
+            );
+          })}
+        </View>
+        <View style={styles.allocationGrid}>
+          {sortedTypes.map(([label, balance], i) => (
+            <View key={label} style={styles.allocationItem}>
+              <View style={styles.allocationLabelRow}>
+                <View style={[styles.dot, { backgroundColor: Colors.goalColors[i % Colors.goalColors.length] }]} />
+                <Text style={styles.allocationLabel}>{label}</Text>
+              </View>
               <Text style={styles.allocationAmount}>{formatCurrency(balance)}</Text>
-              <Text style={styles.allocationPercent}>
+              <Text style={styles.allocationPct}>
                 {totalBalance > 0 ? ((balance / totalBalance) * 100).toFixed(1) : '0'}%
               </Text>
             </View>
-          </View>
-        ))}
-        <View style={styles.divider} />
-        <View style={styles.allocationRow}>
-          <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalAmount}>{formatCurrencyDecimal(totalBalance)}</Text>
+          ))}
         </View>
-      </Card>
+      </View>
+
+      {/* Account Tiles */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Accounts</Text>
+        {data.accounts.map((account) => (
+          <TouchableOpacity
+            key={account.id}
+            style={styles.accountTile}
+            activeOpacity={0.6}
+            onPress={() => navigateToAccount(account.id, account.name)}
+          >
+            <View style={styles.accountTileLeft}>
+              <View style={styles.accountIcon}>
+                <Feather
+                  name={
+                    account.type === 'crypto' ? 'activity' :
+                    account.type === 'real_estate' ? 'home' :
+                    account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
+                    account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
+                    'credit-card'
+                  }
+                  size={18}
+                  color={Colors.accent}
+                />
+              </View>
+              <View>
+                <Text style={styles.accountTileName}>{account.name}</Text>
+                <Text style={styles.accountTileMeta}>
+                  {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.accountTileRight}>
+              <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
+                {formatCurrencyDecimal(account.balance)}
+              </Text>
+              <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Monthly Expenses */}
+      {data.expenses && data.expenses.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Monthly Expenses</Text>
+          {data.expenses.map((expense) => (
+            <View key={expense.id} style={styles.expenseRow}>
+              <View>
+                <Text style={styles.expenseName}>{expense.name}</Text>
+                <Text style={styles.expenseMeta}>
+                  {expense.category} · {expense.frequency}
+                </Text>
+              </View>
+              <Text style={styles.expenseAmount}>
+                -{formatCurrency(expense.effectiveAmount)}/mo
+              </Text>
+            </View>
+          ))}
+          <View style={styles.expenseTotalRow}>
+            <Text style={styles.expenseTotalLabel}>Total Monthly</Text>
+            <Text style={styles.expenseTotalAmount}>
+              -{formatCurrency(data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0))}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Goals Quick View */}
       {data.goals.length > 0 && (
-        <Card>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Goals</Text>
           {data.goals.map((goal) => {
             const progress = goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
             return (
-              <View key={goal.id} style={styles.goalRow}>
+              <View key={goal.id} style={styles.goalTile}>
                 <View style={styles.goalHeader}>
                   <Text style={styles.goalName}>{goal.name}</Text>
-                  <Text style={styles.goalAmount}>
-                    {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
+                  <Text style={styles.goalPercent}>{(progress * 100).toFixed(0)}%</Text>
+                </View>
+                <ProgressBar progress={progress} color={goal.color} height={6} />
+                <View style={styles.goalFooter}>
+                  <Text style={styles.goalFooterText}>
+                    {formatCurrency(goal.currentAmount)} of {formatCurrency(goal.targetAmount)}
                   </Text>
                 </View>
-                <ProgressBar progress={progress} color={goal.color} />
               </View>
             );
           })}
-        </Card>
+        </View>
       )}
-
-      {/* Monthly Expenses Summary */}
-      {data.expenses && data.expenses.length > 0 && (
-        <Card>
-          <Text style={styles.sectionTitle}>Monthly Expenses</Text>
-          <View style={styles.allocationRow}>
-            <Text style={styles.totalLabel}>Total Monthly</Text>
-            <Text style={[styles.totalAmount, { color: Colors.negative }]}>
-              {formatCurrency(data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0))}
-            </Text>
-          </View>
-        </Card>
-      )}
-
-      {/* Accounts List */}
-      <Card>
-        <Text style={styles.sectionTitle}>Accounts</Text>
-        {data.accounts.map((account) => (
-          <View key={account.id} style={styles.accountRow}>
-            <View>
-              <Text style={styles.accountName}>{account.name}</Text>
-              <Text style={styles.accountType}>{accountTypeLabel(account.type)}{account.institution ? ` - ${account.institution}` : ''}</Text>
-            </View>
-            <Text style={[styles.accountBalance, account.balance < 0 && { color: Colors.negative }]}>
-              {formatCurrencyDecimal(account.balance)}
-            </Text>
-          </View>
-        ))}
-      </Card>
     </ScrollView>
   );
 }
@@ -186,114 +253,153 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   content: {
-    padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
   heroSection: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
   },
   heroLabel: {
     color: Colors.textSecondary,
     fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    marginBottom: Spacing.xs,
+    fontWeight: '500',
   },
   heroAmount: {
     color: Colors.textPrimary,
     fontSize: FontSizes.hero,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginTop: 2,
   },
   changeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.xs,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  changeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.round,
+    gap: 4,
   },
   changeText: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  changePercent: {
     fontSize: FontSizes.sm,
+    fontWeight: '600',
   },
   changePeriod: {
     color: Colors.textTertiary,
     fontSize: FontSizes.sm,
   },
+  chartContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  section: {
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.xl,
+  },
   sectionTitle: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    color: Colors.textPrimary,
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
     marginBottom: Spacing.md,
-    fontWeight: '600',
   },
-  allocationRow: {
+  // Allocation
+  allocationBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
   },
-  allocationLeft: {
+  allocationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  allocationItem: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    width: '48%',
+    minWidth: 140,
+  },
+  allocationLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: Spacing.xs,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     marginRight: Spacing.sm,
   },
   allocationLabel: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-  },
-  allocationRight: {
-    alignItems: 'flex-end',
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    fontWeight: '500',
   },
   allocationAmount: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  allocationPercent: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.sm,
-  },
-  totalLabel: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
-  totalAmount: {
     color: Colors.textPrimary,
     fontSize: FontSizes.lg,
     fontWeight: '700',
   },
-  goalRow: {
-    marginBottom: Spacing.md,
+  allocationPct: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: 2,
   },
-  goalHeader: {
+  // Account Tiles
+  accountTile: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    alignItems: 'center',
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
   },
-  goalName: {
+  accountTileLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  accountIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.accentDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  accountTileName: {
     color: Colors.textPrimary,
     fontSize: FontSizes.md,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  goalAmount: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
+  accountTileMeta: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    marginTop: 2,
   },
-  accountRow: {
+  accountTileRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  accountTileBalance: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  // Expenses
+  expenseRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -301,19 +407,63 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  accountName: {
+  expenseName: {
     color: Colors.textPrimary,
     fontSize: FontSizes.md,
     fontWeight: '500',
   },
-  accountType: {
+  expenseMeta: {
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
     marginTop: 2,
   },
-  accountBalance: {
+  expenseAmount: {
+    color: Colors.negative,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  expenseTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: Spacing.md,
+  },
+  expenseTotalLabel: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  expenseTotalAmount: {
+    color: Colors.negative,
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+  },
+  // Goals
+  goalTile: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  goalName: {
     color: Colors.textPrimary,
     fontSize: FontSizes.md,
     fontWeight: '600',
+  },
+  goalPercent: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  goalFooter: {
+    marginTop: Spacing.xs,
+  },
+  goalFooterText: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
   },
 });

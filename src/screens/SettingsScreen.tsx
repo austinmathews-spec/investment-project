@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   connectButtonText: {
     fontSize: FontSizes.md,
     fontWeight: '700',
-    color: Colors.background,
+    color: '#FFFFFF',
   },
   buttonGroup: {
     gap: Spacing.sm,
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   syncButtonText: {
     fontSize: FontSizes.md,
     fontWeight: '700',
-    color: Colors.background,
+    color: '#FFFFFF',
   },
   disconnectButton: {
     backgroundColor: 'transparent',

@@ -1,24 +1,28 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing } from '../theme';
 import DashboardScreen from '../screens/DashboardScreen';
 import AccountsScreen from '../screens/AccountsScreen';
+import AccountDetailScreen from '../screens/AccountDetailScreen';
 import TrendsScreen from '../screens/TrendsScreen';
 import ForecastScreen from '../screens/ForecastScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
+const DashboardStack = createNativeStackNavigator();
+const AccountsStack = createNativeStackNavigator();
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 
 function getTabIcon(route: string): FeatherIconName {
   switch (route) {
-    case 'Dashboard':
+    case 'DashboardTab':
       return 'home';
-    case 'Accounts':
+    case 'AccountsTab':
       return 'credit-card';
     case 'Trends':
       return 'trending-up';
@@ -31,6 +35,49 @@ function getTabIcon(route: string): FeatherIconName {
     default:
       return 'circle';
   }
+}
+
+const stackScreenOptions = {
+  headerStyle: {
+    backgroundColor: Colors.background,
+  },
+  headerTintColor: Colors.textPrimary,
+  headerTitleStyle: {
+    fontWeight: '700' as const,
+    fontSize: FontSizes.lg,
+  },
+  headerShadowVisible: false,
+  headerBackTitleVisible: false,
+};
+
+function DashboardStackScreen() {
+  return (
+    <DashboardStack.Navigator screenOptions={stackScreenOptions}>
+      <DashboardStack.Screen name="Dashboard" component={DashboardScreen} />
+      <DashboardStack.Screen
+        name="AccountDetail"
+        component={AccountDetailScreen}
+        options={({ route }: any) => ({
+          title: route.params?.accountName ?? 'Account',
+        })}
+      />
+    </DashboardStack.Navigator>
+  );
+}
+
+function AccountsStackScreen() {
+  return (
+    <AccountsStack.Navigator screenOptions={stackScreenOptions}>
+      <AccountsStack.Screen name="Accounts" component={AccountsScreen} />
+      <AccountsStack.Screen
+        name="AccountDetail"
+        component={AccountDetailScreen}
+        options={({ route }: any) => ({
+          title: route.params?.accountName ?? 'Account',
+        })}
+      />
+    </AccountsStack.Navigator>
+  );
 }
 
 export default function AppNavigator() {
@@ -47,7 +94,7 @@ export default function AppNavigator() {
           tabBarStyle: {
             backgroundColor: Colors.tabBarBackground,
             borderTopColor: Colors.border,
-            borderTopWidth: 1,
+            borderTopWidth: 0.5,
             height: 80,
             paddingBottom: Spacing.md,
             paddingTop: Spacing.sm,
@@ -56,26 +103,47 @@ export default function AppNavigator() {
             fontSize: FontSizes.xs,
             fontWeight: '600',
           },
-          headerStyle: {
-            backgroundColor: Colors.background,
-            elevation: 0,
-            shadowOpacity: 0,
-            borderBottomWidth: 1,
-            borderBottomColor: Colors.border,
-          },
-          headerTintColor: Colors.textPrimary,
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: FontSizes.lg,
-          },
+          headerShown: false,
         })}
       >
-        <Tab.Screen name="Dashboard" component={DashboardScreen} />
-        <Tab.Screen name="Accounts" component={AccountsScreen} />
-        <Tab.Screen name="Trends" component={TrendsScreen} />
-        <Tab.Screen name="Forecast" component={ForecastScreen} />
-        <Tab.Screen name="Goals" component={GoalsScreen} />
-        <Tab.Screen name="Settings" component={SettingsScreen} />
+        <Tab.Screen
+          name="DashboardTab"
+          component={DashboardStackScreen}
+          options={{ tabBarLabel: 'Dashboard' }}
+        />
+        <Tab.Screen
+          name="AccountsTab"
+          component={AccountsStackScreen}
+          options={{ tabBarLabel: 'Accounts' }}
+        />
+        <Tab.Screen name="Trends" component={TrendsScreen} options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.textPrimary,
+          headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
+          headerShadowVisible: false,
+        }} />
+        <Tab.Screen name="Forecast" component={ForecastScreen} options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.textPrimary,
+          headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
+          headerShadowVisible: false,
+        }} />
+        <Tab.Screen name="Goals" component={GoalsScreen} options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.textPrimary,
+          headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
+          headerShadowVisible: false,
+        }} />
+        <Tab.Screen name="Settings" component={SettingsScreen} options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.textPrimary,
+          headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
+          headerShadowVisible: false,
+        }} />
       </Tab.Navigator>
     </NavigationContainer>
   );

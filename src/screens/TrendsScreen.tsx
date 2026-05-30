@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors, FontSizes, Spacing } from '../theme';
+import { Feather } from '@expo/vector-icons';
+import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { AppData } from '../types';
 import { loadAppData } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate } from '../utils/format';
-import Card from '../components/Card';
 import LargeChart from '../components/LargeChart';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -31,8 +31,8 @@ export default function TrendsScreen() {
   const first = snapshots[0];
   const totalGrowth = latest && first ? latest.netWorth - first.netWorth : 0;
   const totalGrowthPct = first && first.netWorth > 0 ? totalGrowth / first.netWorth : 0;
+  const isPositive = totalGrowth >= 0;
 
-  // Period-over-period changes
   const changes = snapshots.slice(1).map((s, i) => {
     const prev = snapshots[i];
     const change = s.netWorth - prev.netWorth;
@@ -42,99 +42,74 @@ export default function TrendsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.headerLabel}>Net Worth Trends</Text>
-        <Text style={styles.headerSubtext}>Track changes every 2-3 months</Text>
-      </View>
-
-      {/* Overall Growth */}
-      <Card>
-        <Text style={styles.sectionTitle}>ALL-TIME GROWTH</Text>
-        <View style={styles.growthRow}>
-          <View>
-            <Text style={styles.growthLabel}>Total Change</Text>
-            <Text
-              style={[
-                styles.growthValue,
-                { color: totalGrowth >= 0 ? Colors.positive : Colors.negative },
-              ]}
-            >
-              {totalGrowth >= 0 ? '+' : ''}
-              {formatCurrency(totalGrowth)}
-            </Text>
-          </View>
-          <View style={styles.growthRight}>
-            <Text style={styles.growthLabel}>Return</Text>
-            <Text
-              style={[
-                styles.growthValue,
-                { color: totalGrowthPct >= 0 ? Colors.positive : Colors.negative },
-              ]}
-            >
-              {totalGrowthPct >= 0 ? '+' : ''}
-              {(totalGrowthPct * 100).toFixed(1)}%
-            </Text>
-          </View>
-        </View>
-        {first && latest && (
-          <Text style={styles.periodText}>
-            {formatDate(first.date)} — {formatDate(latest.date)}
-          </Text>
+      {/* Hero */}
+      <View style={styles.hero}>
+        <Text style={styles.heroLabel}>Net Worth Trends</Text>
+        {latest && (
+          <Text style={styles.heroAmount}>{formatCurrencyDecimal(latest.netWorth)}</Text>
         )}
-      </Card>
+        {first && latest && (
+          <View style={styles.changeRow}>
+            <View style={[styles.changeBadge, { backgroundColor: isPositive ? Colors.accentDim : 'rgba(255,80,0,0.08)' }]}>
+              <Feather
+                name={isPositive ? 'trending-up' : 'trending-down'}
+                size={14}
+                color={isPositive ? Colors.positive : Colors.negative}
+              />
+              <Text style={[styles.changeText, { color: isPositive ? Colors.positive : Colors.negative }]}>
+                {isPositive ? '+' : ''}{formatCurrency(totalGrowth)} ({isPositive ? '+' : ''}{(totalGrowthPct * 100).toFixed(1)}%)
+              </Text>
+            </View>
+            <Text style={styles.changePeriod}>all time</Text>
+          </View>
+        )}
+      </View>
 
       {/* Chart */}
       {chartData.length >= 2 && (
-        <Card>
+        <View style={styles.chartContainer}>
           <LargeChart
             data={chartData}
-            width={screenWidth - 80}
+            width={screenWidth - 40}
             height={220}
             color={Colors.accent}
-            title="NET WORTH HISTORY"
           />
-        </Card>
+        </View>
       )}
 
       {/* Period Changes */}
-      <Card>
-        <Text style={styles.sectionTitle}>PERIOD CHANGES</Text>
-        {changes.reverse().map((c, i) => (
-          <View key={i} style={styles.changeRow}>
-            <View>
-              <Text style={styles.changePeriod}>
-                {formatDate(c.prev.date)} → {formatDate(c.snapshot.date)}
-              </Text>
-              <Text style={styles.changeNetWorth}>
-                {formatCurrencyDecimal(c.snapshot.netWorth)}
-              </Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Period Changes</Text>
+        {changes.reverse().map((c, i) => {
+          const cPositive = c.change >= 0;
+          return (
+            <View key={i} style={styles.changeTile}>
+              <View>
+                <Text style={styles.tileDates}>
+                  {formatDate(c.prev.date)} → {formatDate(c.snapshot.date)}
+                </Text>
+                <Text style={styles.tileNetWorth}>
+                  {formatCurrencyDecimal(c.snapshot.netWorth)}
+                </Text>
+              </View>
+              <View style={styles.tileRight}>
+                <Text style={[styles.tileChange, { color: cPositive ? Colors.positive : Colors.negative }]}>
+                  {cPositive ? '+' : ''}{formatCurrency(c.change)}
+                </Text>
+                <Text style={[styles.tilePct, { color: cPositive ? Colors.positive : Colors.negative }]}>
+                  {cPositive ? '+' : ''}{(c.changePct * 100).toFixed(1)}%
+                </Text>
+              </View>
             </View>
-            <View style={styles.changeRight}>
-              <Text
-                style={[
-                  styles.changeAmount,
-                  { color: c.change >= 0 ? Colors.positive : Colors.negative },
-                ]}
-              >
-                {c.change >= 0 ? '+' : ''}
-                {formatCurrency(c.change)}
-              </Text>
-              <Text
-                style={[
-                  styles.changePercent,
-                  { color: c.changePct >= 0 ? Colors.positive : Colors.negative },
-                ]}
-              >
-                {c.changePct >= 0 ? '+' : ''}
-                {(c.changePct * 100).toFixed(1)}%
-              </Text>
-            </View>
-          </View>
-        ))}
+          );
+        })}
         {changes.length === 0 && (
-          <Text style={styles.emptyText}>Save at least 2 snapshots to see period changes</Text>
+          <View style={styles.emptyTile}>
+            <Feather name="bar-chart-2" size={32} color={Colors.textTertiary} />
+            <Text style={styles.emptyText}>Save at least 2 snapshots to see period changes</Text>
+          </View>
         )}
-      </Card>
+      </View>
     </ScrollView>
   );
 }
@@ -145,84 +120,99 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   content: {
-    padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
-  header: {
-    paddingVertical: Spacing.lg,
+  hero: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
   },
-  headerLabel: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-  },
-  headerSubtext: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.sm,
-    marginTop: Spacing.xs,
-  },
-  sectionTitle: {
+  heroLabel: {
     color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    marginBottom: Spacing.md,
-    fontWeight: '600',
-  },
-  growthRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  growthRight: {
-    alignItems: 'flex-end',
-  },
-  growthLabel: {
-    color: Colors.textTertiary,
     fontSize: FontSizes.sm,
-    marginBottom: Spacing.xs,
+    fontWeight: '500',
   },
-  growthValue: {
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-  },
-  periodText: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: Spacing.md,
+  heroAmount: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.hero,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginTop: 2,
   },
   changeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  changeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.round,
+    gap: 4,
+  },
+  changeText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
   },
   changePeriod: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.sm,
+  },
+  chartContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  section: {
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.xl,
+  },
+  sectionTitle: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    marginBottom: Spacing.md,
+  },
+  changeTile: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  tileDates: {
     color: Colors.textSecondary,
     fontSize: FontSizes.sm,
   },
-  changeNetWorth: {
+  tileNetWorth: {
     color: Colors.textPrimary,
     fontSize: FontSizes.md,
-    fontWeight: '500',
+    fontWeight: '600',
     marginTop: 2,
   },
-  changeRight: {
+  tileRight: {
     alignItems: 'flex-end',
   },
-  changeAmount: {
+  tileChange: {
     fontSize: FontSizes.md,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  changePercent: {
+  tilePct: {
     fontSize: FontSizes.xs,
     marginTop: 2,
+  },
+  emptyTile: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xxl,
+    gap: Spacing.sm,
   },
   emptyText: {
     color: Colors.textTertiary,
     fontSize: FontSizes.sm,
     textAlign: 'center',
-    paddingVertical: Spacing.lg,
   },
 });

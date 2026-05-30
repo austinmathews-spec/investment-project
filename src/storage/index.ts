@@ -44,7 +44,7 @@ export async function clearAirtableConfig(): Promise<void> {
 export async function loadAppData(): Promise<AppData> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    return emptyData;
+    return { accounts: [], snapshots: [], goals: [], retirementScenarios: [], forecastScenarios: [], expenses: [] };
   }
   const parsed = JSON.parse(raw) as AppData;
   // Ensure expenses array exists for older cached data
@@ -57,8 +57,9 @@ export async function saveAppData(data: AppData): Promise<void> {
 }
 
 export async function resetAppData(): Promise<AppData> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(emptyData));
-  return emptyData;
+  const fresh: AppData = { accounts: [], snapshots: [], goals: [], retirementScenarios: [], forecastScenarios: [], expenses: [] };
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+  return fresh;
 }
 
 // ─── Airtable sync ───────────────────────────────────────────────

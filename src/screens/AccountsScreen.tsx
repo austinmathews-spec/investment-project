@@ -9,13 +9,13 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { v4 as uuidv4 } from 'uuid';
+import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { Account, AccountType, AppData } from '../types';
 import { loadAppData, saveAccount, deleteAccount, saveSnapshot } from '../storage';
 import { formatCurrencyDecimal, accountTypeLabel } from '../utils/format';
-import Card from '../components/Card';
 import InputField from '../components/InputField';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -41,6 +41,7 @@ export default function AccountsScreen() {
   const [balance, setBalance] = useState('');
   const [institution, setInstitution] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const navigation = useNavigation<any>();
 
   const loadData = useCallback(async () => {
     const appData = await loadAppData();
@@ -62,18 +63,10 @@ export default function AccountsScreen() {
     setModalVisible(true);
   };
 
-  const openEdit = (account: Account) => {
-    setEditingAccount(account);
-    setName(account.name);
-    setType(account.type);
-    setBalance(account.balance.toString());
-    setInstitution(account.institution);
-    setModalVisible(true);
-  };
-
   const handleSave = async () => {
     if (!name.trim() || !balance.trim()) {
-      Alert.alert('Error', 'Name and balance are required');
+      const msg = 'Name and balance are required';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
       return;
     }
     const account: Account = {
@@ -87,27 +80,6 @@ export default function AccountsScreen() {
     const updated = await saveAccount(account);
     setData(updated);
     setModalVisible(false);
-  };
-
-  const handleDelete = async (accountId: string) => {
-    if (Platform.OS === 'web') {
-      if (confirm('Delete this account?')) {
-        const updated = await deleteAccount(accountId);
-        setData(updated);
-      }
-    } else {
-      Alert.alert('Delete Account', 'Are you sure?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const updated = await deleteAccount(accountId);
-            setData(updated);
-          },
-        },
-      ]);
-    }
   };
 
   const handleSnapshot = async () => {
@@ -127,11 +99,8 @@ export default function AccountsScreen() {
     };
     const updated = await saveSnapshot(snapshot);
     setData(updated);
-    if (Platform.OS === 'web') {
-      alert('Snapshot saved! Your net worth trend has been updated.');
-    } else {
-      Alert.alert('Snapshot Saved', 'Your net worth trend has been updated.');
-    }
+    const msg = 'Snapshot saved! Your net worth trend has been updated.';
+    Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Snapshot Saved', msg);
   };
 
   if (!data) return null;
@@ -143,42 +112,61 @@ export default function AccountsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Total */}
         <View style={styles.totalSection}>
-          <Text style={styles.totalLabel}>Total Across All Accounts</Text>
+          <Text style={styles.totalLabel}>Total Balance</Text>
           <Text style={styles.totalAmount}>{formatCurrencyDecimal(totalBalance)}</Text>
-          <Text style={styles.accountCount}>{data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</Text>
+          <Text style={styles.accountCount}>
+            {data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}
+          </Text>
         </View>
 
         {/* Snapshot Button */}
         <TouchableOpacity style={styles.snapshotBtn} onPress={handleSnapshot}>
+          <Feather name="camera" size={16} color={Colors.accent} />
           <Text style={styles.snapshotBtnText}>Save Snapshot</Text>
-          <Text style={styles.snapshotSubtext}>Record current balances to track trends</Text>
         </TouchableOpacity>
 
-        {/* Account Cards */}
+        {/* Account Tiles */}
         {data.accounts.map((account) => (
-          <Card key={account.id}>
-            <TouchableOpacity onPress={() => openEdit(account)}>
-              <View style={styles.accountHeader}>
-                <View>
-                  <Text style={styles.accountName}>{account.name}</Text>
-                  <Text style={styles.accountMeta}>
-                    {accountTypeLabel(account.type)} {account.institution ? `- ${account.institution}` : ''}
-                  </Text>
-                </View>
-                <Text style={styles.accountBalance}>{formatCurrencyDecimal(account.balance)}</Text>
+          <TouchableOpacity
+            key={account.id}
+            style={styles.accountTile}
+            activeOpacity={0.6}
+            onPress={() => navigation.navigate('AccountDetail', { accountId: account.id, accountName: account.name })}
+          >
+            <View style={styles.accountTileLeft}>
+              <View style={styles.accountIcon}>
+                <Feather
+                  name={
+                    account.type === 'crypto' ? 'activity' :
+                    account.type === 'real_estate' ? 'home' :
+                    account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
+                    account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
+                    'credit-card'
+                  }
+                  size={18}
+                  color={Colors.accent}
+                />
               </View>
-              <Text style={styles.lastUpdated}>Updated {account.lastUpdated}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(account.id)}>
-              <Text style={styles.deleteBtnText}>Delete</Text>
-            </TouchableOpacity>
-          </Card>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.accountTileName}>{account.name}</Text>
+                <Text style={styles.accountTileMeta}>
+                  {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.accountTileRight}>
+              <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
+                {formatCurrencyDecimal(account.balance)}
+              </Text>
+              <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
+            </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
 
       {/* FAB */}
       <TouchableOpacity style={styles.fab} onPress={openAdd}>
-        <Text style={styles.fabText}>+</Text>
+        <Feather name="plus" size={24} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Add/Edit Modal */}
@@ -202,7 +190,6 @@ export default function AccountsScreen() {
               placeholder="e.g. Chase, Fidelity"
             />
 
-            {/* Type Picker */}
             <Text style={styles.typeLabel}>Account Type</Text>
             <TouchableOpacity style={styles.typePicker} onPress={() => setShowTypePicker(!showTypePicker)}>
               <Text style={styles.typePickerText}>{accountTypeLabel(type)}</Text>
@@ -210,7 +197,7 @@ export default function AccountsScreen() {
             </TouchableOpacity>
 
             {showTypePicker && (
-              <View style={styles.typeList}>
+              <ScrollView style={styles.typeList} nestedScrollEnabled>
                 {ACCOUNT_TYPES.map((t) => (
                   <TouchableOpacity
                     key={t.value}
@@ -220,14 +207,12 @@ export default function AccountsScreen() {
                       setShowTypePicker(false);
                     }}
                   >
-                    <Text
-                      style={[styles.typeItemText, type === t.value && styles.typeItemTextActive]}
-                    >
+                    <Text style={[styles.typeItemText, type === t.value && styles.typeItemTextActive]}>
                       {t.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             )}
 
             <View style={styles.modalActions}>
@@ -261,14 +246,14 @@ const styles = StyleSheet.create({
   totalLabel: {
     color: Colors.textSecondary,
     fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    fontWeight: '500',
   },
   totalAmount: {
     color: Colors.textPrimary,
-    fontSize: FontSizes.xxl,
-    fontWeight: '700',
-    marginTop: Spacing.xs,
+    fontSize: FontSizes.hero,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginTop: 2,
   },
   accountCount: {
     color: Colors.textTertiary,
@@ -276,56 +261,62 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   snapshotBtn: {
+    flexDirection: 'row',
     backgroundColor: Colors.accentDim,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.accent,
+    gap: Spacing.sm,
   },
   snapshotBtnText: {
     color: Colors.accent,
     fontSize: FontSizes.md,
     fontWeight: '600',
   },
-  snapshotSubtext: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: 2,
-  },
-  accountHeader: {
+  accountTile: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
   },
-  accountName: {
+  accountTileLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  accountIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.accentDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  accountTileName: {
     color: Colors.textPrimary,
-    fontSize: FontSizes.lg,
+    fontSize: FontSizes.md,
     fontWeight: '600',
   },
-  accountMeta: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.sm,
-    marginTop: 2,
-  },
-  accountBalance: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-  },
-  lastUpdated: {
+  accountTileMeta: {
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
-    marginTop: Spacing.sm,
+    marginTop: 2,
   },
-  deleteBtn: {
-    marginTop: Spacing.sm,
-    alignSelf: 'flex-end',
+  accountTileRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
-  deleteBtnText: {
-    color: Colors.negative,
-    fontSize: FontSizes.sm,
+  accountTileBalance: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
   },
   fab: {
     position: 'absolute',
@@ -338,16 +329,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 6,
-    shadowColor: Colors.accent,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-  },
-  fabText: {
-    color: Colors.background,
-    fontSize: 28,
-    fontWeight: '600',
-    lineHeight: 30,
   },
   modalOverlay: {
     flex: 1,
@@ -444,7 +429,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: {
-    color: Colors.background,
+    color: '#FFFFFF',
     fontSize: FontSizes.md,
     fontWeight: '700',
   },
