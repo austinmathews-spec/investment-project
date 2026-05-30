@@ -72,12 +72,16 @@ export default function ForecastScreen() {
   );
 
   // --- Retirement ---
+  const portfolioExclNonCash = data
+    ? data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets').reduce((s, a) => s + a.balance, 0)
+    : 0;
+
   const openRetAdd = () => {
     setEditingRet(null);
     setRetName('');
     setRetAge('30');
     setRetRetireAge('60');
-    setRetSavings('');
+    setRetSavings(portfolioExclNonCash.toFixed(0));
     setRetMonthly('2000');
     setRetReturn('7');
     setRetInflation('3');
@@ -132,10 +136,9 @@ export default function ForecastScreen() {
 
   // --- Net Worth Forecast ---
   const openNwAdd = () => {
-    const currentNw = data ? data.accounts.reduce((s, a) => s + a.balance, 0) : 0;
     setEditingNw(null);
     setNwName('');
-    setNwStarting(currentNw.toString());
+    setNwStarting(portfolioExclNonCash.toFixed(0));
     setNwMonthly('3000');
     setNwReturn('7');
     setNwYears('10');
