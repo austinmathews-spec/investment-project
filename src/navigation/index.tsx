@@ -8,6 +8,7 @@ import AccountsScreen from '../screens/AccountsScreen';
 import TrendsScreen from '../screens/TrendsScreen';
 import ForecastScreen from '../screens/ForecastScreen';
 import GoalsScreen from '../screens/GoalsScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -25,6 +26,8 @@ function getTabIcon(route: string): FeatherIconName {
       return 'bar-chart-2';
     case 'Goals':
       return 'target';
+    case 'Settings':
+      return 'settings';
     default:
       return 'circle';
   }
@@ -72,6 +75,7 @@ export default function AppNavigator() {
         <Tab.Screen name="Trends" component={TrendsScreen} />
         <Tab.Screen name="Forecast" component={ForecastScreen} />
         <Tab.Screen name="Goals" component={GoalsScreen} />
+        <Tab.Screen name="Settings" component={SettingsScreen} />
       </Tab.Navigator>
     </NavigationContainer>
   );

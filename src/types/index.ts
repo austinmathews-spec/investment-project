@@ -59,10 +59,31 @@ export interface ForecastScenario {
   years: number;
 }
 
+export type ExpenseFrequency = 'Weekly' | 'Bi-Weekly' | 'Monthly' | 'Semi-Annual' | 'Annual';
+export type ExpenseCategory = 'Housing' | 'Lifestyle' | 'Debt' | 'Car' | 'Penny' | 'Food & Grocery';
+
+export interface RecurringExpense {
+  id: string;
+  airtableId?: string;
+  name: string;
+  amount: number;
+  frequency: ExpenseFrequency;
+  category: ExpenseCategory;
+  splitWith: string[];
+  effectiveAmount: number; // monthly effective cost
+}
+
+export interface AirtableConfig {
+  pat: string;
+  baseId: string;
+}
+
 export interface AppData {
   accounts: Account[];
   snapshots: NetWorthSnapshot[];
   goals: Goal[];
   retirementScenarios: RetirementScenario[];
   forecastScenarios: ForecastScenario[];
+  expenses: RecurringExpense[];
+  airtableConfig?: AirtableConfig;
 }

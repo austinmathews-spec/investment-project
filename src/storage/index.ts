@@ -1,30 +1,55 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Account, NetWorthSnapshot, Goal, RetirementScenario, ForecastScenario, AppData } from '../types';
 import {
-  sampleAccounts,
-  sampleSnapshots,
-  sampleGoals,
-  sampleRetirementScenario,
-  sampleForecastScenario,
-} from '../data/mockData';
+  Account,
+  NetWorthSnapshot,
+  Goal,
+  RetirementScenario,
+  ForecastScenario,
+  RecurringExpense,
+  AirtableConfig,
+  AppData,
+} from '../types';
+import { syncFromAirtable } from '../airtable/sync';
 
 const STORAGE_KEY = '@sofi_dashboard_data';
+const CONFIG_KEY = '@sofi_airtable_config';
 
-const defaultData: AppData = {
-  accounts: sampleAccounts,
-  snapshots: sampleSnapshots,
-  goals: sampleGoals,
-  retirementScenarios: [sampleRetirementScenario],
-  forecastScenarios: [sampleForecastScenario],
+const emptyData: AppData = {
+  accounts: [],
+  snapshots: [],
+  goals: [],
+  retirementScenarios: [],
+  forecastScenarios: [],
+  expenses: [],
 };
+
+// ─── Airtable config persistence ─────────────────────────────────
+
+export async function loadAirtableConfig(): Promise<AirtableConfig | null> {
+  const raw = await AsyncStorage.getItem(CONFIG_KEY);
+  if (!raw) return null;
+  return JSON.parse(raw) as AirtableConfig;
+}
+
+export async function saveAirtableConfig(config: AirtableConfig): Promise<void> {
+  await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+export async function clearAirtableConfig(): Promise<void> {
+  await AsyncStorage.removeItem(CONFIG_KEY);
+}
+
+// ─── Core data persistence ───────────────────────────────────────
 
 export async function loadAppData(): Promise<AppData> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaultData));
-    return defaultData;
+    return emptyData;
   }
-  return JSON.parse(raw) as AppData;
+  const parsed = JSON.parse(raw) as AppData;
+  // Ensure expenses array exists for older cached data
+  if (!parsed.expenses) parsed.expenses = [];
+  return parsed;
 }
 
 export async function saveAppData(data: AppData): Promise<void> {
@@ -32,11 +57,39 @@ export async function saveAppData(data: AppData): Promise<void> {
 }
 
 export async function resetAppData(): Promise<AppData> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaultData));
-  return defaultData;
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(emptyData));
+  return emptyData;
 }
 
-// --- Account helpers ---
+// ─── Airtable sync ───────────────────────────────────────────────
+
+export async function syncWithAirtable(): Promise<AppData> {
+  const config = await loadAirtableConfig();
+  if (!config || !config.pat || !config.baseId) {
+    return loadAppData();
+  }
+
+  const result = await syncFromAirtable(config.pat, config.baseId);
+
+  // Load existing local data to preserve goals, forecasts, retirement scenarios
+  const localData = await loadAppData();
+
+  const merged: AppData = {
+    accounts: result.accounts,
+    snapshots: result.snapshots,
+    expenses: result.expenses,
+    // These are local-only (not in Airtable)
+    goals: localData.goals,
+    retirementScenarios: localData.retirementScenarios,
+    forecastScenarios: localData.forecastScenarios,
+  };
+
+  await saveAppData(merged);
+  return merged;
+}
+
+// ─── Account helpers ─────────────────────────────────────────────
+
 export async function saveAccount(account: Account): Promise<AppData> {
   const data = await loadAppData();
   const idx = data.accounts.findIndex((a) => a.id === account.id);
@@ -56,7 +109,8 @@ export async function deleteAccount(accountId: string): Promise<AppData> {
   return data;
 }
 
-// --- Snapshot helpers ---
+// ─── Snapshot helpers ────────────────────────────────────────────
+
 export async function saveSnapshot(snapshot: NetWorthSnapshot): Promise<AppData> {
   const data = await loadAppData();
   const idx = data.snapshots.findIndex((s) => s.id === snapshot.id);
@@ -70,7 +124,8 @@ export async function saveSnapshot(snapshot: NetWorthSnapshot): Promise<AppData>
   return data;
 }
 
-// --- Goal helpers ---
+// ─── Goal helpers ────────────────────────────────────────────────
+
 export async function saveGoal(goal: Goal): Promise<AppData> {
   const data = await loadAppData();
   const idx = data.goals.findIndex((g) => g.id === goal.id);
@@ -90,7 +145,8 @@ export async function deleteGoal(goalId: string): Promise<AppData> {
   return data;
 }
 
-// --- Retirement scenario helpers ---
+// ─── Retirement scenario helpers ─────────────────────────────────
+
 export async function saveRetirementScenario(scenario: RetirementScenario): Promise<AppData> {
   const data = await loadAppData();
   const idx = data.retirementScenarios.findIndex((s) => s.id === scenario.id);
@@ -110,7 +166,8 @@ export async function deleteRetirementScenario(scenarioId: string): Promise<AppD
   return data;
 }
 
-// --- Forecast scenario helpers ---
+// ─── Forecast scenario helpers ───────────────────────────────────
+
 export async function saveForecastScenario(scenario: ForecastScenario): Promise<AppData> {
   const data = await loadAppData();
   const idx = data.forecastScenarios.findIndex((s) => s.id === scenario.id);
@@ -126,6 +183,27 @@ export async function saveForecastScenario(scenario: ForecastScenario): Promise<
 export async function deleteForecastScenario(scenarioId: string): Promise<AppData> {
   const data = await loadAppData();
   data.forecastScenarios = data.forecastScenarios.filter((s) => s.id !== scenarioId);
+  await saveAppData(data);
+  return data;
+}
+
+// ─── Expense helpers ─────────────────────────────────────────────
+
+export async function saveExpense(expense: RecurringExpense): Promise<AppData> {
+  const data = await loadAppData();
+  const idx = data.expenses.findIndex((e) => e.id === expense.id);
+  if (idx >= 0) {
+    data.expenses[idx] = expense;
+  } else {
+    data.expenses.push(expense);
+  }
+  await saveAppData(data);
+  return data;
+}
+
+export async function deleteExpense(expenseId: string): Promise<AppData> {
+  const data = await loadAppData();
+  data.expenses = data.expenses.filter((e) => e.id !== expenseId);
   await saveAppData(data);
   return data;
 }

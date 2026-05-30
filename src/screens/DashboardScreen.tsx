@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Dimensions, RefreshControl } from '
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { AppData } from '../types';
-import { loadAppData } from '../storage';
+import { loadAppData, syncWithAirtable, loadAirtableConfig } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
 import Card from '../components/Card';
 import MiniChart from '../components/MiniChart';
@@ -17,7 +17,17 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
-    const appData = await loadAppData();
+    const config = await loadAirtableConfig();
+    let appData: AppData;
+    if (config && config.pat && config.baseId) {
+      try {
+        appData = await syncWithAirtable();
+      } catch {
+        appData = await loadAppData();
+      }
+    } else {
+      appData = await loadAppData();
+    }
     setData(appData);
   }, []);
 
@@ -138,6 +148,19 @@ export default function DashboardScreen() {
         </Card>
       )}
 
+      {/* Monthly Expenses Summary */}
+      {data.expenses && data.expenses.length > 0 && (
+        <Card>
+          <Text style={styles.sectionTitle}>Monthly Expenses</Text>
+          <View style={styles.allocationRow}>
+            <Text style={styles.totalLabel}>Total Monthly</Text>
+            <Text style={[styles.totalAmount, { color: Colors.negative }]}>
+              {formatCurrency(data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0))}
+            </Text>
+          </View>
+        </Card>
+      )}
+
       {/* Accounts List */}
       <Card>
         <Text style={styles.sectionTitle}>Accounts</Text>
@@ -145,9 +168,11 @@ export default function DashboardScreen() {
           <View key={account.id} style={styles.accountRow}>
             <View>
               <Text style={styles.accountName}>{account.name}</Text>
-              <Text style={styles.accountType}>{accountTypeLabel(account.type)} - {account.institution}</Text>
+              <Text style={styles.accountType}>{accountTypeLabel(account.type)}{account.institution ? ` - ${account.institution}` : ''}</Text>
             </View>
-            <Text style={styles.accountBalance}>{formatCurrencyDecimal(account.balance)}</Text>
+            <Text style={[styles.accountBalance, account.balance < 0 && { color: Colors.negative }]}>
+              {formatCurrencyDecimal(account.balance)}
+            </Text>
           </View>
         ))}
       </Card>
