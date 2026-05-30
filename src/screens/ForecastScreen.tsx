@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,129 @@ import InputField from '../components/InputField';
 import FilterChips from '../components/FilterChips';
 
 type Tab = 'retirement' | 'networth';
+
+function RetirementPreview({ age, retireAge, savings, monthly, returnRate, inflation, income, screenWidth }: {
+  age: string; retireAge: string; savings: string; monthly: string;
+  returnRate: string; inflation: string; income: string; screenWidth: number;
+}) {
+  const preview = useMemo(() => {
+    const scenario: RetirementScenario = {
+      id: 'preview',
+      name: 'Preview',
+      currentAge: parseInt(age) || 30,
+      retirementAge: parseInt(retireAge) || 60,
+      currentSavings: parseFloat(savings) || 0,
+      monthlyContribution: parseFloat(monthly) || 0,
+      annualReturnRate: (isNaN(parseFloat(returnRate)) ? 7 : parseFloat(returnRate)) / 100,
+      inflationRate: (isNaN(parseFloat(inflation)) ? 3 : parseFloat(inflation)) / 100,
+      desiredAnnualIncome: parseFloat(income) || 80000,
+    };
+    if (scenario.retirementAge <= scenario.currentAge) return null;
+    const forecast = calculateRetirementForecast(scenario);
+    const incomeResult = calculateRetirementIncome(scenario);
+    const chartData = forecast.map(p => ({ label: `Age ${p.age}`, value: p.value }));
+    return { chartData, incomeResult };
+  }, [age, retireAge, savings, monthly, returnRate, inflation, income]);
+
+  if (!preview || preview.chartData.length < 2) return null;
+  const chartWidth = Math.min(screenWidth - 80, 700);
+
+  return (
+    <View style={previewStyles.container}>
+      <Text style={previewStyles.title}>LIVE PREVIEW</Text>
+      <LargeChart data={preview.chartData} width={chartWidth} height={160} color={Colors.accent} />
+      <View style={previewStyles.statsRow}>
+        <View style={previewStyles.stat}>
+          <Text style={previewStyles.statLabel}>At Retirement</Text>
+          <Text style={previewStyles.statValue}>{formatCurrency(preview.incomeResult.projectedBalance)}</Text>
+        </View>
+        <View style={previewStyles.stat}>
+          <Text style={previewStyles.statLabel}>Monthly (4%)</Text>
+          <Text style={previewStyles.statValue}>{formatCurrency(preview.incomeResult.monthlyWithdrawal)}</Text>
+        </View>
+        <View style={previewStyles.stat}>
+          <Text style={previewStyles.statLabel}>Years of Income</Text>
+          <Text style={previewStyles.statValue}>{preview.incomeResult.yearsOfIncome >= 80 ? '80+' : preview.incomeResult.yearsOfIncome.toString()}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function NetWorthPreview({ starting, monthly, returnRate, years, screenWidth }: {
+  starting: string; monthly: string; returnRate: string; years: string; screenWidth: number;
+}) {
+  const preview = useMemo(() => {
+    const scenario: ForecastScenario = {
+      id: 'preview',
+      name: 'Preview',
+      startingNetWorth: parseFloat(starting) || 0,
+      monthlySavings: parseFloat(monthly) || 0,
+      annualReturnRate: (isNaN(parseFloat(returnRate)) ? 7 : parseFloat(returnRate)) / 100,
+      years: parseInt(years) || 10,
+    };
+    if (scenario.years <= 0) return null;
+    const forecast = calculateNetWorthForecast(scenario);
+    const finalValue = forecast[forecast.length - 1]?.value ?? 0;
+    const totalGain = finalValue - scenario.startingNetWorth;
+    const chartData = forecast.map(p => ({ label: `Yr ${p.year}`, value: p.value }));
+    return { chartData, finalValue, totalGain };
+  }, [starting, monthly, returnRate, years]);
+
+  if (!preview || preview.chartData.length < 2) return null;
+  const chartWidth = Math.min(screenWidth - 80, 700);
+
+  return (
+    <View style={previewStyles.container}>
+      <Text style={previewStyles.title}>LIVE PREVIEW</Text>
+      <LargeChart data={preview.chartData} width={chartWidth} height={160} color="#4A90D9" />
+      <View style={previewStyles.statsRow}>
+        <View style={previewStyles.stat}>
+          <Text style={previewStyles.statLabel}>Final Value</Text>
+          <Text style={[previewStyles.statValue, { color: Colors.accent }]}>{formatCurrency(preview.finalValue)}</Text>
+        </View>
+        <View style={previewStyles.stat}>
+          <Text style={previewStyles.statLabel}>Total Gain</Text>
+          <Text style={[previewStyles.statValue, { color: Colors.positive }]}>+{formatCurrency(preview.totalGain)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const previewStyles = StyleSheet.create({
+  container: {
+    marginVertical: Spacing.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+  },
+  title: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: Spacing.sm,
+  },
+  stat: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
+  },
+  statValue: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+});
 
 export default function ForecastScreen() {
   const { width: screenWidth } = useWindowDimensions();
@@ -375,6 +498,13 @@ export default function ForecastScreen() {
               <InputField label="Inflation Rate (%)" value={retInflation} onChangeText={setRetInflation} keyboardType="decimal-pad" />
               <InputField label="Desired Annual Income ($)" value={retIncome} onChangeText={setRetIncome} keyboardType="decimal-pad" />
 
+              {/* Live Preview Chart */}
+              <RetirementPreview
+                age={retAge} retireAge={retRetireAge} savings={retSavings}
+                monthly={retMonthly} returnRate={retReturn} inflation={retInflation}
+                income={retIncome} screenWidth={screenWidth}
+              />
+
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setRetModalVisible(false)}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -400,6 +530,13 @@ export default function ForecastScreen() {
             <InputField label="Monthly Savings ($)" value={nwMonthly} onChangeText={setNwMonthly} keyboardType="decimal-pad" />
             <InputField label="Expected Annual Return (%)" value={nwReturn} onChangeText={setNwReturn} keyboardType="decimal-pad" />
             <InputField label="Forecast Years" value={nwYears} onChangeText={setNwYears} keyboardType="number-pad" />
+
+            {/* Live Preview Chart */}
+            <NetWorthPreview
+              starting={nwStarting} monthly={nwMonthly}
+              returnRate={nwReturn} years={nwYears}
+              screenWidth={screenWidth}
+            />
 
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setNwModalVisible(false)}>
