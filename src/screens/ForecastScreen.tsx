@@ -265,11 +265,13 @@ export default function ForecastScreen() {
                 const retIncomeForecast = validRet ? calculateRetirementIncome(retScenario) : null;
                 const retChartData = retForecast.map(p => ({ label: `Age ${p.age ?? 0} · ${yearFromAge(p.age ?? 0)}`, value: p.value }));
                 const chartW = Math.min(screenWidth - 64, 800);
+                const yearsToRetire = retScenario.retirementAge - retScenario.currentAge;
                 return (
                   <>
                     {retChartData.length >= 2 && (
                       <View style={styles.liveChartSection}>
-                        <LargeChart data={retChartData} width={chartW} height={180} color={Colors.accent} title="PROJECTED GROWTH" />
+                        <Text style={styles.liveChartStarting}>Starting: {formatCurrency(retScenario.currentSavings)} · {yearsToRetire} years to retire</Text>
+                        <LargeChart data={retChartData} width={chartW} height={180} color={Colors.accent} title="PROJECTED GROWTH (TODAY'S DOLLARS)" />
                         {retIncomeForecast && (
                           <View style={styles.liveStatsRow}>
                             <View style={styles.liveStat}>
@@ -337,8 +339,7 @@ export default function ForecastScreen() {
               </View>
 
               <View style={styles.sliderSection}>
-                <Text style={styles.sliderSectionTitle}>SAVINGS</Text>
-                <SliderInput label="Current Savings" value={parseFloat(retSavings) || 0} min={0} max={2000000} step={5000} formatValue={fmtDollar} textValue={retSavings} onTextChange={setRetSavings} onValueChange={v => setRetSavings(v.toFixed(0))} suffix="" />
+                <Text style={styles.sliderSectionTitle}>CONTRIBUTIONS</Text>
                 <SliderInput label="Monthly Contribution" value={parseFloat(retMonthly) || 0} min={0} max={20000} step={100} formatValue={fmtDollar} textValue={retMonthly} onTextChange={setRetMonthly} onValueChange={v => setRetMonthly(v.toFixed(0))} suffix="/mo" />
               </View>
 
@@ -346,7 +347,6 @@ export default function ForecastScreen() {
                 <Text style={styles.sliderSectionTitle}>ASSUMPTIONS</Text>
                 <SliderInput label="Annual Return" value={isNaN(parseFloat(retReturn)) ? 7 : parseFloat(retReturn)} min={0} max={15} step={0.5} formatValue={fmtPct} onValueChange={v => setRetReturn(v.toString())} />
                 <SliderInput label="Inflation Rate" value={isNaN(parseFloat(retInflation)) ? 3 : parseFloat(retInflation)} min={0} max={10} step={0.5} formatValue={fmtPct} onValueChange={v => setRetInflation(v.toString())} />
-                <SliderInput label="Desired Annual Income" value={parseFloat(retIncome) || 80000} min={20000} max={500000} step={5000} formatValue={fmtDollar} textValue={retIncome} onTextChange={setRetIncome} onValueChange={v => setRetIncome(v.toFixed(0))} suffix="" />
               </View>
             </View>
           </ScrollView>
@@ -479,6 +479,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.tileBg,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
+  },
+  liveChartStarting: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    marginBottom: Spacing.sm,
+    textAlign: 'center',
   },
   liveStatsRow: {
     flexDirection: 'row',

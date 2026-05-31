@@ -248,7 +248,15 @@ export default function GoalsScreen() {
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScroll} bounces={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingGoal ? 'Edit Goal' : 'New Goal'}</Text>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Text style={styles.modalHeaderCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{editingGoal ? 'Edit Goal' : 'New Goal'}</Text>
+              <TouchableOpacity onPress={handleSave}>
+                <Text style={styles.modalHeaderSave}>Save</Text>
+              </TouchableOpacity>
+            </View>
 
             <InputField label="Goal Name" value={name} onChangeText={setName} placeholder="e.g. House Down Payment" />
             <InputField
@@ -340,14 +348,6 @@ export default function GoalsScreen() {
               ))}
             </View>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
           </View>
           </ScrollView>
         </View>
@@ -500,11 +500,28 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalHeaderCancel: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.md,
+  },
+  modalHeaderSave: {
+    color: Colors.accent,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
   modalTitle: {
     color: Colors.textPrimary,
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.lg,
     fontWeight: '700',
-    marginBottom: Spacing.lg,
   },
   colorLabel: {
     color: Colors.textSecondary,
@@ -525,37 +542,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: Colors.textPrimary,
   },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.lg,
-    gap: Spacing.md,
-  },
-  cancelBtn: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  saveBtn: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
+
   linkedAccountsList: {
     marginTop: Spacing.sm,
     backgroundColor: Colors.tileBg,
