@@ -200,6 +200,7 @@ export default function AccountsScreen() {
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScroll} bounces={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editingAccount ? 'Edit Account' : 'Add Account'}</Text>
 
@@ -252,6 +253,7 @@ export default function AccountsScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -372,13 +374,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
+  modalScroll: {
+    maxHeight: '92%',
+  },
   modalContent: {
     backgroundColor: Colors.cardBackground,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
-    maxHeight: '85%',
   },
   modalTitle: {
     color: Colors.textPrimary,

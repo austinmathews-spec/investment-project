@@ -246,6 +246,7 @@ export default function GoalsScreen() {
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScroll} bounces={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editingGoal ? 'Edit Goal' : 'New Goal'}</Text>
 
@@ -348,6 +349,7 @@ export default function GoalsScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -488,13 +490,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
+  modalScroll: {
+    maxHeight: '92%',
+  },
   modalContent: {
     backgroundColor: Colors.cardBackground,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
-    maxHeight: '90%',
   },
   modalTitle: {
     color: Colors.textPrimary,
