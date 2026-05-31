@@ -6,7 +6,6 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Switch,
   useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -23,7 +22,6 @@ export default function DashboardScreen() {
   const isDesktop = screenWidth >= 768;
   const [data, setData] = useState<AppData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [includeNonCash, setIncludeNonCash] = useState(false);
   const [expenseExpanded, setExpenseExpanded] = useState(false);
   const navigation = useNavigation<any>();
   const contentMaxWidth = 960;
@@ -59,10 +57,7 @@ export default function DashboardScreen() {
 
   if (!data) return null;
 
-  // Filter accounts based on non-cash toggle
-  const visibleAccounts = includeNonCash
-    ? data.accounts
-    : data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets');
+  const visibleAccounts = data.accounts;
 
   const totalBalance = visibleAccounts.reduce((sum, a) => sum + a.balance, 0);
   const prevSnapshot = data.snapshots.length > 1 ? data.snapshots[data.snapshots.length - 2] : null;
@@ -164,18 +159,7 @@ export default function DashboardScreen() {
 
       {/* Accounts grouped by type */}
       <View style={styles.section}>
-        <View style={styles.accountsSectionHeader}>
-          <Text style={styles.sectionTitle}>Accounts</Text>
-          <View style={styles.nonCashToggle}>
-            <Text style={styles.nonCashToggleLabel}>Non-Cash</Text>
-            <Switch
-              value={includeNonCash}
-              onValueChange={setIncludeNonCash}
-              trackColor={{ false: Colors.border, true: Colors.accent }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View>
+        <Text style={styles.sectionTitle}>Accounts</Text>
         <View style={styles.accountGrid}>
           {visibleAccounts.map((account) => (
             <TouchableOpacity
@@ -479,21 +463,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   // Accounts
-  accountsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  nonCashToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  nonCashToggleLabel: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.sm,
-  },
   accountGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

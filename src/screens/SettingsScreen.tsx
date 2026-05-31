@@ -207,9 +207,7 @@ export default function SettingsScreen() {
         <Text style={styles.infoItem}>
           • Saving & Investment → Your account balances
         </Text>
-        <Text style={styles.infoItem}>
-          • Non-Cash Assets → RSUs, vehicles, etc.
-        </Text>
+
         <Text style={styles.infoItem}>
           • Debt → Liabilities (student loans, etc.)
         </Text>

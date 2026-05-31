@@ -8,11 +8,9 @@ export type AccountType =
   | 'hsa'
   | '529'
   | 'crypto'
-  | 'real_estate'
-  | 'vehicle'
   | 'other';
 
-export type SourceTable = 'Savings & Investment' | 'Non-Cash Assets' | 'Debt' | 'Local';
+export type SourceTable = 'Savings & Investment' | 'Debt' | 'Local';
 
 export interface Account {
   id: string;

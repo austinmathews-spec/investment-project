@@ -16,7 +16,7 @@ interface ColumnMapping {
   accountName: string;
   type: AccountType;
   institution: string;
-  table: 'savings' | 'nonCash' | 'debt';
+  table: 'savings' | 'debt';
 }
 
 const SAVINGS_COLUMNS: ColumnMapping[] = [
@@ -30,11 +30,6 @@ const SAVINGS_COLUMNS: ColumnMapping[] = [
   { fieldName: 'Roth IRA', accountName: 'Roth IRA', type: 'roth_ira', institution: '', table: 'savings' },
   { fieldName: 'Rollover IRA', accountName: 'Rollover IRA', type: 'traditional_ira', institution: '', table: 'savings' },
   { fieldName: 'HSA', accountName: 'HSA', type: 'hsa', institution: '', table: 'savings' },
-];
-
-// Non-cash columns are dynamic (column names may change), but we map known ones
-const NON_CASH_KNOWN: Partial<ColumnMapping>[] = [
-  { fieldName: 'Airtable RSU (Vested)', accountName: 'RSU (Vested)', type: 'other', institution: 'Airtable', table: 'nonCash' },
 ];
 
 const SKIP_FIELDS = new Set([
@@ -68,13 +63,6 @@ export async function fetchSavingsInvestment(
   baseId: string
 ): Promise<AirtableRecord[]> {
   return listRecords<AirtableFields>(pat, baseId, 'Saving & Investment');
-}
-
-export async function fetchNonCashAssets(
-  pat: string,
-  baseId: string
-): Promise<AirtableRecord[]> {
-  return listRecords<AirtableFields>(pat, baseId, 'Non-Cash Assets');
 }
 
 export async function fetchDebt(
@@ -115,19 +103,8 @@ function getCurrencyColumns(
   return Array.from(cols);
 }
 
-const VEHICLE_KEYWORDS = ['car', 'vehicle', 'auto', 'truck', 'motorcycle'];
-
-function inferNonCashType(columnName: string, knownType?: AccountType): AccountType {
-  if (knownType) return knownType;
-  const lower = columnName.toLowerCase();
-  if (VEHICLE_KEYWORDS.some(kw => lower.includes(kw))) return 'vehicle';
-  if (lower.includes('rsu') || lower.includes('stock') || lower.includes('equity')) return 'other';
-  return 'real_estate';
-}
-
 export function parseAccounts(
   savingsRecords: AirtableRecord[],
-  nonCashRecords: AirtableRecord[],
   debtRecords: AirtableRecord[]
 ): Account[] {
   const accounts: Account[] = [];
@@ -151,32 +128,6 @@ export function parseAccounts(
         institution: col.institution,
         lastUpdated: latest.fields.Date as string,
         sourceTable: 'Savings & Investment',
-      });
-    }
-  }
-
-  // Non-cash assets
-  const sortedNonCash = [...nonCashRecords].sort(
-    (a, b) =>
-      new Date(b.fields.Date as string).getTime() -
-      new Date(a.fields.Date as string).getTime()
-  );
-  const latestNonCash = sortedNonCash[0];
-
-  if (latestNonCash) {
-    const nonCashCols = getCurrencyColumns([latestNonCash], SKIP_FIELDS);
-    for (const colName of nonCashCols) {
-      const known = NON_CASH_KNOWN.find((k) => k.fieldName === colName);
-      const balance = (latestNonCash.fields[colName] as number) ?? 0;
-      const inferredType = inferNonCashType(colName, known?.type);
-      accounts.push({
-        id: fieldToId(colName, 'nonCash'),
-        name: known?.accountName ?? colName,
-        type: inferredType,
-        balance,
-        institution: known?.institution ?? '',
-        lastUpdated: latestNonCash.fields.Date as string,
-        sourceTable: 'Non-Cash Assets',
       });
     }
   }
@@ -213,7 +164,6 @@ export function parseAccounts(
 export function parseSnapshots(
   calcHubRecords: AirtableRecord[],
   savingsRecords: AirtableRecord[],
-  nonCashRecords: AirtableRecord[],
   debtRecords: AirtableRecord[]
 ): NetWorthSnapshot[] {
   const sorted = [...calcHubRecords].sort(
@@ -227,10 +177,6 @@ export function parseSnapshots(
   for (const r of savingsRecords) {
     savingsByDate.set(r.fields.Date as string, r.fields);
   }
-  const nonCashByDate = new Map<string, AirtableFields>();
-  for (const r of nonCashRecords) {
-    nonCashByDate.set(r.fields.Date as string, r.fields);
-  }
   const debtByDate = new Map<string, AirtableFields>();
   for (const r of debtRecords) {
     debtByDate.set(r.fields.Date as string, r.fields);
@@ -242,10 +188,9 @@ export function parseSnapshots(
 
     // Extract lookup values (Airtable returns them as arrays)
     const totalSavings = extractLookup(rec.fields['Total Savings & Retirement']);
-    const totalNonCash = extractLookup(rec.fields['Total Non-Liquid Assets']);
     const totalDebtVal = extractLookup(rec.fields['Total Debt & Liabilities']);
 
-    const totalAssets = totalSavings + totalNonCash;
+    const totalAssets = totalSavings;
     const totalLiabilities = Math.abs(totalDebtVal);
 
     // Build per-account balances
@@ -345,17 +290,16 @@ export async function syncFromAirtable(
   pat: string,
   baseId: string
 ): Promise<AirtableSyncResult> {
-  const [savingsRecs, nonCashRecs, debtRecs, calcHubRecs, expenseRecs] =
+  const [savingsRecs, debtRecs, calcHubRecs, expenseRecs] =
     await Promise.all([
       fetchSavingsInvestment(pat, baseId),
-      fetchNonCashAssets(pat, baseId),
       fetchDebt(pat, baseId),
       fetchCalculationHub(pat, baseId),
       fetchRecurringExpenses(pat, baseId),
     ]);
 
-  const accounts = parseAccounts(savingsRecs, nonCashRecs, debtRecs);
-  const snapshots = parseSnapshots(calcHubRecs, savingsRecs, nonCashRecs, debtRecs);
+  const accounts = parseAccounts(savingsRecs, debtRecs);
+  const snapshots = parseSnapshots(calcHubRecs, savingsRecs, debtRecs);
   const expenses = parseExpenses(expenseRecs);
 
   // Extract reference prices from latest savings record
