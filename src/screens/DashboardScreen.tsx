@@ -75,21 +75,6 @@ export default function DashboardScreen() {
     value: s.netWorth,
   }));
 
-  // Group visible accounts by type
-  const accountsByType: Record<string, typeof visibleAccounts> = {};
-  for (const a of visibleAccounts) {
-    const label = accountTypeLabel(a.type);
-    if (!accountsByType[label]) accountsByType[label] = [];
-    accountsByType[label].push(a);
-  }
-  const sortedTypeGroups = Object.entries(accountsByType)
-    .map(([label, accounts]) => ({
-      label,
-      accounts,
-      total: accounts.reduce((s, a) => s + a.balance, 0),
-    }))
-    .sort((a, b) => b.total - a.total);
-
   // Burn rate
   const totalMonthlyExpenses = data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0);
   const expensesByCategory = data.expenses.reduce<Record<string, number>>((acc, e) => {
@@ -191,37 +176,24 @@ export default function DashboardScreen() {
             />
           </View>
         </View>
-        {sortedTypeGroups.map((group) => (
-          <View key={group.label} style={styles.accountGroup}>
-            <View style={styles.accountGroupHeader}>
-              <Text style={styles.accountGroupTitle}>{group.label}</Text>
-              <Text style={styles.accountGroupTotal}>{formatCurrency(group.total)}</Text>
-            </View>
-            {group.accounts.map((account) => (
-              <TouchableOpacity
-                key={account.id}
-                style={styles.accountTile}
-                activeOpacity={0.6}
-                onPress={() => navigateToAccount(account.id, account.name)}
-              >
-                <View style={styles.accountTileLeft}>
-                  <View>
-                    <Text style={styles.accountTileName}>{account.name}</Text>
-                    <Text style={styles.accountTileMeta}>
-                      {account.institution || ''}{account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.accountTileRight}>
-                  <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
-                    {formatCurrencyDecimal(account.balance)}
-                  </Text>
-                  <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ))}
+        <View style={styles.accountGrid}>
+          {visibleAccounts.map((account) => (
+            <TouchableOpacity
+              key={account.id}
+              style={styles.accountGridTile}
+              activeOpacity={0.6}
+              onPress={() => navigateToAccount(account.id, account.name)}
+            >
+              <Text style={styles.accountGridName} numberOfLines={1}>{account.name}</Text>
+              <Text style={[styles.accountGridBalance, account.balance < 0 && { color: Colors.negative }]}>
+                {formatCurrencyDecimal(account.balance)}
+              </Text>
+              <Text style={styles.accountGridMeta} numberOfLines={1}>
+                {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* Goals — tiered & prioritized */}
@@ -522,61 +494,33 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: FontSizes.sm,
   },
-  accountGroup: {
-    marginBottom: Spacing.md,
-  },
-  accountGroupHeader: {
+  accountGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    marginBottom: Spacing.xs,
-  },
-  accountGroupTitle: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  accountGroupTotal: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
-  accountTile: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.xs,
-  },
-  accountTileLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  accountTileName: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '500',
-  },
-  accountTileMeta: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: 2,
-  },
-  accountTileRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
-  accountTileBalance: {
+  accountGridTile: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    width: '48.5%',
+    minWidth: 150,
+  },
+  accountGridName: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    fontWeight: '500',
+    marginBottom: Spacing.xs,
+  },
+  accountGridBalance: {
     color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+    marginBottom: Spacing.xs,
+  },
+  accountGridMeta: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs,
   },
   // Goals
   goalSubtitle: {

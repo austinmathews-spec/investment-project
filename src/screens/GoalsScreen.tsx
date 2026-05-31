@@ -270,34 +270,44 @@ export default function GoalsScreen() {
             />
 
             {/* Link Accounts */}
-            <Text style={styles.colorLabel}>Link Accounts (optional)</Text>
-            <Text style={styles.accountPickerHint}>Select accounts to auto-track progress from balances</Text>
-            <ScrollView style={styles.accountPickerList} nestedScrollEnabled>
-              {data.accounts.map(account => {
-                const isLinked = linkedAccountIds.includes(account.id);
-                return (
-                  <TouchableOpacity
-                    key={account.id}
-                    style={[styles.accountPickerItem, isLinked && styles.accountPickerItemActive]}
-                    onPress={() => toggleAccount(account.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.accountPickerLeft}>
-                      <View style={[styles.accountPickerCheck, isLinked && styles.accountPickerCheckActive]}>
-                        {isLinked && <Feather name="check" size={12} color="#FFF" />}
+            <View style={styles.linkAccountsSection}>
+              <View style={styles.linkAccountsHeader}>
+                <View style={styles.linkAccountsHeaderLeft}>
+                  <Feather name="link" size={16} color={Colors.accent} />
+                  <Text style={styles.linkAccountsTitle}>Link Accounts</Text>
+                </View>
+                <Text style={styles.linkAccountsBadge}>
+                  {linkedAccountIds.length > 0 ? `${linkedAccountIds.length} selected` : 'Optional'}
+                </Text>
+              </View>
+              <Text style={styles.linkAccountsHint}>Select accounts to auto-track progress from live balances</Text>
+              <ScrollView style={styles.accountPickerList} nestedScrollEnabled>
+                {data.accounts.map(account => {
+                  const isLinked = linkedAccountIds.includes(account.id);
+                  return (
+                    <TouchableOpacity
+                      key={account.id}
+                      style={[styles.accountPickerItem, isLinked && styles.accountPickerItemActive]}
+                      onPress={() => toggleAccount(account.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.accountPickerLeft}>
+                        <View style={[styles.accountPickerCheck, isLinked && styles.accountPickerCheckActive]}>
+                          {isLinked && <Feather name="check" size={12} color="#FFF" />}
+                        </View>
+                        <View>
+                          <Text style={styles.accountPickerName}>{account.name}</Text>
+                          <Text style={styles.accountPickerMeta}>
+                            {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                          </Text>
+                        </View>
                       </View>
-                      <View>
-                        <Text style={styles.accountPickerName}>{account.name}</Text>
-                        <Text style={styles.accountPickerMeta}>
-                          {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                      <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
             <InputField
               label="Target Date (YYYY-MM-DD)"
@@ -562,14 +572,46 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     fontWeight: '600',
   },
-  accountPickerHint: {
+  linkAccountsSection: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  linkAccountsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  linkAccountsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  linkAccountsTitle: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  linkAccountsBadge: {
+    color: Colors.accent,
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
+    backgroundColor: Colors.accentDim,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.round,
+  },
+  linkAccountsHint: {
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
     marginBottom: Spacing.sm,
   },
   accountPickerList: {
-    maxHeight: 180,
-    marginBottom: Spacing.md,
+    maxHeight: 200,
   },
   accountPickerItem: {
     flexDirection: 'row',
