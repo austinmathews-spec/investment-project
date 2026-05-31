@@ -236,7 +236,15 @@ export default function AccountDetailScreen() {
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScroll} bounces={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Account</Text>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.modalHeaderBtn}>
+                <Feather name="x" size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Edit Account</Text>
+              <TouchableOpacity onPress={handleSave} style={styles.modalHeaderBtn}>
+                <Text style={styles.modalHeaderSave}>Save</Text>
+              </TouchableOpacity>
+            </View>
             <InputField label="Account Name" value={editName} onChangeText={setEditName} />
             <InputField
               label="Balance"
@@ -272,14 +280,6 @@ export default function AccountDetailScreen() {
               </ScrollView>
             )}
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
           </View>
           </ScrollView>
         </View>
@@ -441,11 +441,30 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalHeaderBtn: {
+    width: 44,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalHeaderSave: {
+    color: Colors.accent,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
   modalTitle: {
     color: Colors.textPrimary,
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.lg,
     fontWeight: '700',
-    marginBottom: Spacing.lg,
   },
   typeLabel: {
     color: Colors.textSecondary,
@@ -492,35 +511,5 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: '600',
   },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.lg,
-    gap: Spacing.md,
-  },
-  cancelBtn: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  saveBtn: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
+
 });

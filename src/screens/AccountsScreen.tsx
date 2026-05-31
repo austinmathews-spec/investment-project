@@ -14,10 +14,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { Account, AccountType, AppData } from '../types';
-import { loadAppData, saveAccount, deleteAccount, saveSnapshot } from '../storage';
+import { loadAppData, saveAccount, deleteAccount } from '../storage';
 import { formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
 import InputField from '../components/InputField';
 import FilterChips from '../components/FilterChips';
+import MiniChart from '../components/MiniChart';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'checking', label: 'Checking' },
@@ -85,26 +86,7 @@ export default function AccountsScreen() {
     setModalVisible(false);
   };
 
-  const handleSnapshot = async () => {
-    if (!data) return;
-    const totalAssets = data.accounts.reduce((sum, a) => sum + a.balance, 0);
-    const balances: Record<string, number> = {};
-    data.accounts.forEach((a) => {
-      balances[a.id] = a.balance;
-    });
-    const snapshot = {
-      id: uuidv4(),
-      date: new Date().toISOString().split('T')[0],
-      totalAssets,
-      totalLiabilities: 0,
-      netWorth: totalAssets,
-      accountBalances: balances,
-    };
-    const updated = await saveSnapshot(snapshot);
-    setData(updated);
-    const msg = 'Snapshot saved! Your net worth trend has been updated.';
-    Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Snapshot Saved', msg);
-  };
+
 
   if (!data) return null;
 
@@ -129,11 +111,7 @@ export default function AccountsScreen() {
           </Text>
         </View>
 
-        {/* Snapshot Button */}
-        <TouchableOpacity style={styles.snapshotBtn} onPress={handleSnapshot}>
-          <Feather name="camera" size={16} color={Colors.accent} />
-          <Text style={styles.snapshotBtnText}>Save Snapshot (all accounts)</Text>
-        </TouchableOpacity>
+
 
         {/* Filters */}
         <FilterChips
@@ -153,42 +131,53 @@ export default function AccountsScreen() {
         />
 
         {/* Account Tiles */}
-        {filteredAccounts.map((account) => (
-          <TouchableOpacity
-            key={account.id}
-            style={styles.accountTile}
-            activeOpacity={0.6}
-            onPress={() => navigation.navigate('AccountDetail', { accountId: account.id, accountName: account.name })}
-          >
-            <View style={styles.accountTileLeft}>
-              <View style={styles.accountIcon}>
-                <Feather
-                  name={
-                    account.type === 'crypto' ? 'activity' :
-                    account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
-                    account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
-                    'credit-card'
-                  }
-                  size={18}
-                  color={Colors.accent}
-                />
+        {filteredAccounts.map((account) => {
+          const history = data.snapshots
+            .filter(s => s.accountBalances[account.id] !== undefined)
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map(s => s.accountBalances[account.id]);
+          history.push(account.balance);
+          const sparkColor = history.length >= 2 && history[history.length - 1] >= history[0] ? Colors.positive : Colors.negative;
+          return (
+            <TouchableOpacity
+              key={account.id}
+              style={styles.accountTile}
+              activeOpacity={0.6}
+              onPress={() => navigation.navigate('AccountDetail', { accountId: account.id, accountName: account.name })}
+            >
+              <View style={styles.accountTileLeft}>
+                <View style={styles.accountIcon}>
+                  <Feather
+                    name={
+                      account.type === 'crypto' ? 'activity' :
+                      account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
+                      account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
+                      'credit-card'
+                    }
+                    size={18}
+                    color={Colors.accent}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.accountTileName}>{account.name}</Text>
+                  <Text style={styles.accountTileMeta}>
+                    {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                    {account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.accountTileName}>{account.name}</Text>
-                <Text style={styles.accountTileMeta}>
-                  {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
-                  {account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
+              <View style={styles.accountTileRight}>
+                {history.length >= 2 && (
+                  <MiniChart data={history} width={60} height={28} color={sparkColor} showFill={false} />
+                )}
+                <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
+                  {formatCurrencyDecimal(account.balance)}
                 </Text>
+                <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
               </View>
-            </View>
-            <View style={styles.accountTileRight}>
-              <Text style={[styles.accountTileBalance, account.balance < 0 && { color: Colors.negative }]}>
-                {formatCurrencyDecimal(account.balance)}
-              </Text>
-              <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          );
+        })}
         </View>
       </ScrollView>
 
@@ -202,7 +191,15 @@ export default function AccountsScreen() {
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScroll} bounces={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingAccount ? 'Edit Account' : 'Add Account'}</Text>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalHeaderBtn}>
+                <Feather name="x" size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{editingAccount ? 'Edit Account' : 'Add Account'}</Text>
+              <TouchableOpacity onPress={handleSave} style={styles.modalHeaderBtn}>
+                <Text style={styles.modalHeaderSave}>Save</Text>
+              </TouchableOpacity>
+            </View>
 
             <InputField label="Account Name" value={name} onChangeText={setName} placeholder="e.g. Chase Checking" />
             <InputField
@@ -244,14 +241,6 @@ export default function AccountsScreen() {
               </ScrollView>
             )}
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
           </View>
           </ScrollView>
         </View>
@@ -295,21 +284,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     marginTop: Spacing.xs,
   },
-  snapshotBtn: {
-    flexDirection: 'row',
-    backgroundColor: Colors.accentDim,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  snapshotBtnText: {
-    color: Colors.accent,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
+
   accountTile: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -384,11 +359,30 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalHeaderBtn: {
+    width: 44,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalHeaderSave: {
+    color: Colors.accent,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
   modalTitle: {
     color: Colors.textPrimary,
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.lg,
     fontWeight: '700',
-    marginBottom: Spacing.lg,
   },
   typeLabel: {
     color: Colors.textSecondary,
@@ -439,35 +433,5 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: '600',
   },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.lg,
-    gap: Spacing.md,
-  },
-  cancelBtn: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  saveBtn: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
+
 });

@@ -235,13 +235,13 @@ export default function ForecastScreen() {
           <ScrollView style={styles.modalScroll} bounces={false}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={() => setRetModalVisible(false)}>
-                  <Text style={styles.modalHeaderCancel}>Cancel</Text>
+                <TouchableOpacity onPress={() => setRetModalVisible(false)} style={styles.modalHeaderBtn}>
+                  <Feather name="x" size={20} color={Colors.textSecondary} />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>
                   {editingRet ? 'Edit' : 'New'} Retirement Plan
                 </Text>
-                <TouchableOpacity onPress={handleRetSave}>
+                <TouchableOpacity onPress={handleRetSave} style={styles.modalHeaderBtn}>
                   <Text style={styles.modalHeaderSave}>Save</Text>
                 </TouchableOpacity>
               </View>
@@ -459,10 +459,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  modalHeaderCancel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-    fontWeight: '500',
+  modalHeaderBtn: {
+    width: 44,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalTitle: {
     color: Colors.textPrimary,

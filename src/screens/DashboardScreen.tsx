@@ -15,6 +15,7 @@ import { AppData, Goal } from '../types';
 import { loadAppData, syncWithAirtable, loadAirtableConfig, reorderGoals } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel, formatAgeYear } from '../utils/format';
 import LargeChart from '../components/LargeChart';
+import MiniChart from '../components/MiniChart';
 import ProgressBar from '../components/ProgressBar';
 
 export default function DashboardScreen() {
@@ -161,22 +162,39 @@ export default function DashboardScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Accounts</Text>
         <View style={styles.accountGrid}>
-          {visibleAccounts.map((account) => (
-            <TouchableOpacity
-              key={account.id}
-              style={styles.accountGridTile}
-              activeOpacity={0.6}
-              onPress={() => navigateToAccount(account.id, account.name)}
-            >
-              <Text style={styles.accountGridName} numberOfLines={1}>{account.name}</Text>
-              <Text style={[styles.accountGridBalance, account.balance < 0 && { color: Colors.negative }]}>
-                {formatCurrencyDecimal(account.balance)}
-              </Text>
-              <Text style={styles.accountGridMeta} numberOfLines={1}>
-                {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {visibleAccounts.map((account) => {
+            const history = data.snapshots
+              .filter(s => s.accountBalances[account.id] !== undefined)
+              .sort((a, b) => a.date.localeCompare(b.date))
+              .map(s => s.accountBalances[account.id]);
+            history.push(account.balance);
+            const sparkColor = history.length >= 2 && history[history.length - 1] >= history[0] ? Colors.positive : Colors.negative;
+            return (
+              <TouchableOpacity
+                key={account.id}
+                style={styles.accountGridTile}
+                activeOpacity={0.6}
+                onPress={() => navigateToAccount(account.id, account.name)}
+              >
+                <View style={styles.accountGridTop}>
+                  <View style={styles.accountGridInfo}>
+                    <Text style={styles.accountGridName} numberOfLines={1}>{account.name}</Text>
+                    <Text style={[styles.accountGridBalance, account.balance < 0 && { color: Colors.negative }]}>
+                      {formatCurrencyDecimal(account.balance)}
+                    </Text>
+                    <Text style={styles.accountGridMeta} numberOfLines={1}>
+                      {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                    </Text>
+                  </View>
+                  {history.length >= 2 && (
+                    <View style={styles.accountGridChart}>
+                      <MiniChart data={history} width={80} height={36} color={sparkColor} showFill={false} />
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -474,6 +492,18 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     width: '48.5%',
     minWidth: 150,
+  },
+  accountGridTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  accountGridInfo: {
+    flex: 1,
+    marginRight: Spacing.xs,
+  },
+  accountGridChart: {
+    alignSelf: 'center',
   },
   accountGridName: {
     color: Colors.textSecondary,
