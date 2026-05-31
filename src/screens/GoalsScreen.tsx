@@ -249,11 +249,11 @@ export default function GoalsScreen() {
           <ScrollView style={styles.modalScroll} bounces={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalHeaderCancel}>Cancel</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalHeaderBtn}>
+                <Feather name="x" size={20} color={Colors.textSecondary} />
               </TouchableOpacity>
               <Text style={styles.modalTitle}>{editingGoal ? 'Edit Goal' : 'New Goal'}</Text>
-              <TouchableOpacity onPress={handleSave}>
+              <TouchableOpacity onPress={handleSave} style={styles.modalHeaderBtn}>
                 <Text style={styles.modalHeaderSave}>Save</Text>
               </TouchableOpacity>
             </View>
@@ -509,9 +509,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  modalHeaderCancel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
+  modalHeaderBtn: {
+    width: 44,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalHeaderSave: {
     color: Colors.accent,
