@@ -29,8 +29,6 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'hsa', label: 'HSA' },
   { value: '529', label: '529 Plan' },
   { value: 'crypto', label: 'Crypto' },
-  { value: 'real_estate', label: 'Real Estate' },
-  { value: 'vehicle', label: 'Vehicle' },
   { value: 'other', label: 'Other' },
 ];
 

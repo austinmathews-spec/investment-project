@@ -29,8 +29,6 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'hsa', label: 'HSA' },
   { value: '529', label: '529 Plan' },
   { value: 'crypto', label: 'Crypto' },
-  { value: 'real_estate', label: 'Real Estate' },
-  { value: 'vehicle', label: 'Vehicle' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -43,7 +41,7 @@ export default function AccountsScreen() {
   const [balance, setBalance] = useState('');
   const [institution, setInstitution] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState('Excl. Non-Cash');
+  const [sourceFilter, setSourceFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
   const navigation = useNavigation<any>();
 
@@ -111,8 +109,7 @@ export default function AccountsScreen() {
   if (!data) return null;
 
   const filteredAccounts = data.accounts.filter(a => {
-    if (sourceFilter === 'Excl. Non-Cash' && a.sourceTable === 'Non-Cash Assets') return false;
-    if (sourceFilter !== 'All' && sourceFilter !== 'Excl. Non-Cash' && a.sourceTable !== sourceFilter) return false;
+    if (sourceFilter !== 'All' && a.sourceTable !== sourceFilter) return false;
     if (typeFilter !== 'All' && accountTypeLabel(a.type) !== typeFilter) return false;
     return true;
   });
@@ -140,7 +137,7 @@ export default function AccountsScreen() {
 
         {/* Filters */}
         <FilterChips
-          options={['All', 'Excl. Non-Cash', ...Array.from(new Set(data.accounts.map(a => a.sourceTable)))]}
+          options={['All', ...Array.from(new Set(data.accounts.map(a => a.sourceTable)))]}
           selected={sourceFilter}
           onSelect={setSourceFilter}
         />
@@ -148,8 +145,6 @@ export default function AccountsScreen() {
           options={['All', ...Array.from(new Set(
             (sourceFilter === 'All'
               ? data.accounts
-              : sourceFilter === 'Excl. Non-Cash'
-              ? data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets')
               : data.accounts.filter(a => a.sourceTable === sourceFilter)
             ).map(a => accountTypeLabel(a.type))
           ))]}
@@ -170,8 +165,6 @@ export default function AccountsScreen() {
                 <Feather
                   name={
                     account.type === 'crypto' ? 'activity' :
-                    account.type === 'real_estate' ? 'home' :
-                    account.type === 'vehicle' ? 'truck' :
                     account.type === '401k' || account.type === 'roth_ira' || account.type === 'traditional_ira' ? 'shield' :
                     account.type === 'savings' || account.type === 'hsa' ? 'dollar-sign' :
                     'credit-card'

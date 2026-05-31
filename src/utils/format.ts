@@ -41,8 +41,6 @@ export function accountTypeLabel(type: string): string {
     hsa: 'HSA',
     '529': '529 Plan',
     crypto: 'Crypto',
-    real_estate: 'Real Estate',
-    vehicle: 'Vehicle',
     other: 'Other',
   };
   return labels[type] || type;
@@ -59,8 +57,6 @@ export function accountTypeIcon(type: string): string {
     hsa: 'heart',
     '529': 'book',
     crypto: 'zap',
-    real_estate: 'home',
-    vehicle: 'truck',
     other: 'folder',
   };
   return icons[type] || 'folder';

@@ -67,13 +67,13 @@ export default function ForecastScreen() {
   );
 
   // --- Retirement ---
-  const portfolioExclNonCash = data
-    ? data.accounts.filter(a => a.sourceTable !== 'Non-Cash Assets').reduce((s, a) => s + a.balance, 0)
+  const portfolioTotal = data
+    ? data.accounts.reduce((s, a) => s + a.balance, 0)
     : 0;
 
   const linkedSavingsTotal = data && retLinkedAccountIds.length > 0
     ? data.accounts.filter(a => retLinkedAccountIds.includes(a.id)).reduce((s, a) => s + a.balance, 0)
-    : portfolioExclNonCash;
+    : portfolioTotal;
 
   const toggleRetAccount = (accountId: string) => {
     setRetLinkedAccountIds(prev => {
@@ -91,7 +91,7 @@ export default function ForecastScreen() {
     setRetName('');
     setRetAge('27');
     setRetRetireAge('60');
-    setRetSavings(portfolioExclNonCash.toFixed(0));
+    setRetSavings(portfolioTotal.toFixed(0));
     setRetMonthly('2000');
     setRetReturn('7');
     setRetInflation('3');
@@ -303,12 +303,12 @@ export default function ForecastScreen() {
                 <Text style={styles.sliderSectionTitle}>INCLUDE ACCOUNTS</Text>
                 <Text style={styles.accountPickerHint}>
                   {retLinkedAccountIds.length === 0
-                    ? 'All accounts (excl. Non-Cash) selected by default'
+                    ? 'All accounts selected by default'
                     : `${retLinkedAccountIds.length} account${retLinkedAccountIds.length > 1 ? 's' : ''} · ${formatCurrency(linkedSavingsTotal)}`}
                 </Text>
                 <ScrollView style={styles.accountPickerList} nestedScrollEnabled>
                   {data.accounts
-                    .filter(a => a.sourceTable !== 'Non-Cash Assets')
+
                     .map(account => {
                       const isLinked = retLinkedAccountIds.includes(account.id);
                       return (
