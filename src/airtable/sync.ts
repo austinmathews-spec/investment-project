@@ -46,6 +46,35 @@ function fieldToId(fieldName: string, table: string): string {
   return `${table}::${fieldName}`;
 }
 
+function guessAccountType(fieldName: string): AccountType {
+  const lower = fieldName.toLowerCase();
+  if (lower.includes('401k') || lower.includes('401(k)')) return '401k';
+  if (lower.includes('roth')) return 'roth_ira';
+  if (lower.includes('rollover') || lower.includes('traditional ira')) return 'traditional_ira';
+  if (lower.includes('hsa')) return 'hsa';
+  if (lower.includes('529')) return '529';
+  if (lower.includes('crypto') || lower.includes('btc') || lower.includes('bitcoin') || lower.includes('strike')) return 'crypto';
+  if (lower.includes('checking') || lower.includes('debit')) return 'checking';
+  if (lower.includes('hys') || lower.includes('saving') || lower.includes('marcus')) return 'savings';
+  if (lower.includes('brokerage') || lower.includes('fidelity') || lower.includes('schwab') || lower.includes('vanguard') || lower.includes('robinhood')) return 'brokerage';
+  return 'other';
+}
+
+function guessInstitution(fieldName: string): string {
+  const lower = fieldName.toLowerCase();
+  if (lower.includes('sofi')) return 'SoFi';
+  if (lower.includes('marcus')) return 'Marcus';
+  if (lower.includes('bofa') || lower.includes('bank of america')) return 'BofA';
+  if (lower.includes('fidelity')) return 'Fidelity';
+  if (lower.includes('schwab')) return 'Schwab';
+  if (lower.includes('vanguard')) return 'Vanguard';
+  if (lower.includes('strike')) return 'Strike';
+  if (lower.includes('robinhood')) return 'Robinhood';
+  if (lower.includes('airtable')) return 'Airtable';
+  if (lower.includes('coinbase')) return 'Coinbase';
+  return '';
+}
+
 // ─── Fetch helpers ───────────────────────────────────────────────
 
 interface AirtableFields {
@@ -118,7 +147,10 @@ export function parseAccounts(
   const latest = sortedSavings[0];
 
   if (latest) {
+    // Known columns first (for nice names/types/institutions)
+    const knownFieldNames = new Set(SAVINGS_COLUMNS.map((c) => c.fieldName));
     for (const col of SAVINGS_COLUMNS) {
+      if (!(col.fieldName in latest.fields)) continue;
       const balance = (latest.fields[col.fieldName] as number) ?? 0;
       accounts.push({
         id: fieldToId(col.fieldName, 'savings'),
@@ -126,6 +158,20 @@ export function parseAccounts(
         type: col.type,
         balance,
         institution: col.institution,
+        lastUpdated: latest.fields.Date as string,
+        sourceTable: 'Savings & Investment',
+      });
+    }
+
+    // Dynamically discover any NEW numeric columns not in the known list
+    for (const [key, val] of Object.entries(latest.fields)) {
+      if (knownFieldNames.has(key) || SKIP_FIELDS.has(key) || typeof val !== 'number') continue;
+      accounts.push({
+        id: fieldToId(key, 'savings'),
+        name: key.replace(/\s*\(.*?\)\s*$/, ''), // strip trailing parenthetical
+        type: guessAccountType(key),
+        balance: val,
+        institution: guessInstitution(key),
         lastUpdated: latest.fields.Date as string,
         sourceTable: 'Savings & Investment',
       });
@@ -201,6 +247,12 @@ export function parseSnapshots(
         accountBalances[fieldToId(col.fieldName, 'savings')] =
           (savingsFields[col.fieldName] as number) ?? 0;
       }
+      // Include dynamically discovered columns in snapshot balances
+      const knownFieldNames = new Set(SAVINGS_COLUMNS.map((c) => c.fieldName));
+      for (const [key, val] of Object.entries(savingsFields)) {
+        if (knownFieldNames.has(key) || SKIP_FIELDS.has(key) || typeof val !== 'number') continue;
+        accountBalances[fieldToId(key, 'savings')] = val;
+      }
     }
 
     return {
@@ -242,11 +294,10 @@ export async function createSavingsSnapshot(
   date: string
 ): Promise<void> {
   const fields: Record<string, unknown> = { Date: date };
-  for (const col of SAVINGS_COLUMNS) {
-    const id = fieldToId(col.fieldName, 'savings');
-    if (id in accountBalances) {
-      fields[col.fieldName] = accountBalances[id];
-    }
+  for (const [accountId, balance] of Object.entries(accountBalances)) {
+    if (!accountId.startsWith('savings::')) continue;
+    const fieldName = accountId.replace('savings::', '');
+    fields[fieldName] = balance;
   }
   await createRecord(pat, baseId, 'Saving & Investment', fields);
 }
