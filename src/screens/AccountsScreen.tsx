@@ -117,6 +117,7 @@ export default function AccountsScreen() {
     return true;
   });
   const filteredBalance = filteredAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const isFiltered = sourceFilter !== 'All' || typeFilter !== 'All';
 
   return (
     <View style={styles.container}>
@@ -124,7 +125,7 @@ export default function AccountsScreen() {
         <View style={styles.contentInner}>
         {/* Total */}
         <View style={styles.totalSection}>
-          <Text style={styles.totalLabel}>Total Balance</Text>
+          <Text style={styles.totalLabel}>{isFiltered ? 'Filtered Balance' : 'Total Balance'}</Text>
           <Text style={styles.totalAmount}>{formatCurrencyDecimal(filteredBalance)}</Text>
           <Text style={styles.accountCount}>
             {filteredAccounts.length} account{filteredAccounts.length !== 1 ? 's' : ''}
@@ -134,7 +135,7 @@ export default function AccountsScreen() {
         {/* Snapshot Button */}
         <TouchableOpacity style={styles.snapshotBtn} onPress={handleSnapshot}>
           <Feather name="camera" size={16} color={Colors.accent} />
-          <Text style={styles.snapshotBtnText}>Save Snapshot</Text>
+          <Text style={styles.snapshotBtnText}>Save Snapshot (all accounts)</Text>
         </TouchableOpacity>
 
         {/* Filters */}
