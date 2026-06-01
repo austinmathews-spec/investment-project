@@ -16,7 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { AppData } from '../types';
 import { loadAppData, syncWithAirtable, loadAirtableConfig } from '../storage';
-import { ChatMessage, SendResult, sendChatMessage } from '../services/gemini';
+import { ChatMessage, SendResult, sendChatMessage, loadMemories, clearMemories } from '../services/gemini';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GEMINI_KEY_STORAGE = '@sofi_gemini_key';
@@ -43,6 +43,7 @@ export default function GuidanceScreen() {
   const [geminiKey, setGeminiKey] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [keyInput, setKeyInput] = useState('');
+  const [memoryCount, setMemoryCount] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
   // Load data + API key + history
@@ -66,6 +67,9 @@ export default function GuidanceScreen() {
         if (storedHistory) {
           try { setMessages(JSON.parse(storedHistory)); } catch { /* ignore */ }
         }
+
+        const mems = await loadMemories();
+        setMemoryCount(mems.length);
       })();
     }, [])
   );
@@ -111,6 +115,10 @@ export default function GuidanceScreen() {
         const freshData = await loadAppData();
         setAppData(freshData);
       }
+
+      // Refresh memory count
+      const mems = await loadMemories();
+      setMemoryCount(mems.length);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : 'Something went wrong';
       setMessages(prev => [...prev, {
@@ -136,6 +144,11 @@ export default function GuidanceScreen() {
   const handleClearChat = () => {
     setMessages([]);
     AsyncStorage.removeItem(CHAT_HISTORY_KEY);
+  };
+
+  const handleClearMemory = async () => {
+    await clearMemories();
+    setMemoryCount(0);
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
@@ -242,6 +255,12 @@ export default function GuidanceScreen() {
           </View>
         </View>
         <View style={styles.headerRight}>
+          {memoryCount > 0 && (
+            <TouchableOpacity onPress={handleClearMemory} style={styles.memoryBadge}>
+              <Feather name="database" size={12} color={Colors.accent} />
+              <Text style={styles.memoryText}>{memoryCount}</Text>
+            </TouchableOpacity>
+          )}
           {!geminiKey && (
             <TouchableOpacity onPress={() => setShowKeyInput(true)} style={styles.headerBtn}>
               <Feather name="key" size={18} color={Colors.textSecondary} />
@@ -346,6 +365,20 @@ const styles = StyleSheet.create({
   },
   headerBtn: {
     padding: Spacing.sm,
+  },
+  memoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: Colors.accentDim,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.xl,
+  },
+  memoryText: {
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
+    color: Colors.accent,
   },
   messagesList: {
     paddingHorizontal: Spacing.md,

@@ -13,6 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../theme';
 import Card from '../components/Card';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   loadAirtableConfig,
   saveAirtableConfig,
@@ -24,6 +25,9 @@ import {
 import { AirtableConfig } from '../types';
 import { Feather } from '@expo/vector-icons';
 
+const CUSTOM_INSTRUCTIONS_KEY = '@sofi_advisor_instructions';
+const GEMINI_KEY_STORAGE = '@sofi_gemini_key';
+
 export default function SettingsScreen() {
   const [pat, setPat] = useState('');
   const [baseId, setBaseId] = useState('');
@@ -31,10 +35,16 @@ export default function SettingsScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [instructionsSaved, setInstructionsSaved] = useState(false);
+  const [geminiKey, setGeminiKey] = useState('');
+  const [geminiKeySaved, setGeminiKeySaved] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       loadConfig();
+      loadCustomInstructions();
+      loadGeminiKey();
     }, [])
   );
 
@@ -45,6 +55,29 @@ export default function SettingsScreen() {
       setBaseId(config.baseId);
       setIsConnected(true);
     }
+  }
+
+  async function loadCustomInstructions() {
+    const stored = await AsyncStorage.getItem(CUSTOM_INSTRUCTIONS_KEY);
+    if (stored) setCustomInstructions(stored);
+  }
+
+  async function loadGeminiKey() {
+    const stored = await AsyncStorage.getItem(GEMINI_KEY_STORAGE);
+    const envKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+    setGeminiKey(stored || envKey);
+  }
+
+  async function handleSaveInstructions() {
+    await AsyncStorage.setItem(CUSTOM_INSTRUCTIONS_KEY, customInstructions);
+    setInstructionsSaved(true);
+    setTimeout(() => setInstructionsSaved(false), 2000);
+  }
+
+  async function handleSaveGeminiKey() {
+    await AsyncStorage.setItem(GEMINI_KEY_STORAGE, geminiKey.trim());
+    setGeminiKeySaved(true);
+    setTimeout(() => setGeminiKeySaved(false), 2000);
   }
 
   async function handleConnect() {
@@ -214,6 +247,69 @@ export default function SettingsScreen() {
           <Text style={styles.connectButtonText}>Connect & Sync</Text>
         </TouchableOpacity>
       )}
+
+      {/* ── Advisor Settings ── */}
+      <Text style={[styles.title, { marginTop: Spacing.xl }]}>Investor Guidance</Text>
+      <Text style={styles.subtitle}>
+        Customize your AI advisor and manage your Gemini API key.
+      </Text>
+
+      <Card>
+        <View style={styles.statusRow}>
+          <Feather name="key" size={14} color={Colors.textSecondary} />
+          <Text style={[styles.label, { marginBottom: 0, marginLeft: Spacing.xs }]}>Gemini API Key</Text>
+        </View>
+        <TextInput
+          style={[styles.input, { marginTop: Spacing.sm }]}
+          value={geminiKey}
+          onChangeText={setGeminiKey}
+          placeholder="Paste your Gemini API key..."
+          placeholderTextColor={Colors.textTertiary}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Text style={styles.hint}>Get a free key at aistudio.google.com/apikey</Text>
+        <TouchableOpacity
+          style={[styles.connectButton, { marginBottom: 0 }]}
+          onPress={handleSaveGeminiKey}
+        >
+          <Text style={styles.connectButtonText}>
+            {geminiKeySaved ? 'Saved!' : 'Save API Key'}
+          </Text>
+        </TouchableOpacity>
+      </Card>
+
+      <Card>
+        <View style={styles.statusRow}>
+          <Feather name="edit-3" size={14} color={Colors.textSecondary} />
+          <Text style={[styles.label, { marginBottom: 0, marginLeft: Spacing.xs }]}>Custom Instructions</Text>
+        </View>
+        <Text style={[styles.hint, { marginTop: Spacing.xs, marginBottom: Spacing.sm }]}>
+          Tell your advisor about your preferences, risk tolerance, financial philosophy, or anything else it should always consider.
+        </Text>
+        <TextInput
+          style={[styles.input, styles.instructionsInput]}
+          value={customInstructions}
+          onChangeText={setCustomInstructions}
+          placeholder={'e.g. "I\'m risk-tolerant and prefer index funds. I want to retire by 45. I prioritize tax-advantaged accounts."'}
+          placeholderTextColor={Colors.textTertiary}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
+        <TouchableOpacity
+          style={[styles.connectButton, { marginBottom: 0 }]}
+          onPress={handleSaveInstructions}
+        >
+          <Text style={styles.connectButtonText}>
+            {instructionsSaved ? 'Saved!' : 'Save Instructions'}
+          </Text>
+        </TouchableOpacity>
+      </Card>
+
+      {/* ── Info ── */}
+      <Text style={[styles.title, { marginTop: Spacing.xl }]}>About</Text>
 
       <Card>
         <Text style={styles.infoTitle}>What syncs from Airtable</Text>
@@ -392,5 +488,9 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  instructionsInput: {
+    minHeight: 100,
+    paddingTop: Spacing.md,
   },
 });

@@ -2,6 +2,11 @@ import { AppData, Goal, RetirementScenario } from '../types';
 import { formatCurrencyDecimal, accountTypeLabel } from '../utils/format';
 import { saveGoal, saveRetirementScenario } from '../storage';
 import { v4 as uuid } from 'uuid';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CUSTOM_INSTRUCTIONS_KEY = '@sofi_advisor_instructions';
+const MEMORY_KEY = '@sofi_advisor_memory';
+const MAX_MEMORIES = 20;
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-1.5-flash';
@@ -110,7 +115,11 @@ Guidelines:
 
 You can CREATE GOALS and RETIREMENT SCENARIOS for the user by calling the provided functions. When the user asks you to create a goal or forecast/retirement scenario, use the appropriate function. After calling a function, confirm what you created with a brief summary.
 
-You are NOT a replacement for a financial advisor. Always remind users to consult professionals for major decisions.`;
+You are NOT a replacement for a financial advisor. Always remind users to consult professionals for major decisions.
+
+IMPORTANT: After every response, silently extract 0-2 key facts or preferences the user revealed that would be useful in future conversations (e.g. "User is risk-tolerant", "User wants to retire by 45", "User prefers index funds"). Return these as a JSON block at the VERY END of your response, on its own line, in this exact format:
+[MEMORY]{"facts":["fact 1","fact 2"]}[/MEMORY]
+If there are no new facts worth remembering, omit the MEMORY block entirely. The user will NOT see this block — it is parsed and stored automatically.`;
 
 // ─── Function declarations for Gemini ───────────────────────────
 
@@ -244,6 +253,40 @@ export interface SendResult {
   action?: string;
 }
 
+// ─── Memory helpers ─────────────────────────────────────────────
+
+export async function loadMemories(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(MEMORY_KEY);
+  if (!raw) return [];
+  try { return JSON.parse(raw) as string[]; } catch { return []; }
+}
+
+async function saveMemories(memories: string[]): Promise<void> {
+  await AsyncStorage.setItem(MEMORY_KEY, JSON.stringify(memories.slice(-MAX_MEMORIES)));
+}
+
+function extractAndStripMemory(text: string): { clean: string; facts: string[] } {
+  const match = text.match(/\[MEMORY\](.*?)\[\/MEMORY\]/s);
+  if (!match) return { clean: text, facts: [] };
+  const clean = text.replace(/\[MEMORY\].*?\[\/MEMORY\]/s, '').trim();
+  try {
+    const parsed = JSON.parse(match[1]);
+    return { clean, facts: Array.isArray(parsed.facts) ? parsed.facts : [] };
+  } catch {
+    return { clean, facts: [] };
+  }
+}
+
+export async function clearMemories(): Promise<void> {
+  await AsyncStorage.removeItem(MEMORY_KEY);
+}
+
+export async function loadCustomInstructions(): Promise<string> {
+  return (await AsyncStorage.getItem(CUSTOM_INSTRUCTIONS_KEY)) || '';
+}
+
+// ─── Main chat function ─────────────────────────────────────────
+
 export async function sendChatMessage(
   userMessage: string,
   history: ChatMessage[],
@@ -256,6 +299,16 @@ export async function sendChatMessage(
   }
 
   const portfolioContext = buildPortfolioContext(appData);
+  const customInstructions = await loadCustomInstructions();
+  const memories = await loadMemories();
+
+  let systemBlock = SYSTEM_PROMPT;
+  if (customInstructions) {
+    systemBlock += `\n\nUSER'S CUSTOM INSTRUCTIONS (always follow these):\n${customInstructions}`;
+  }
+  if (memories.length > 0) {
+    systemBlock += `\n\nTHINGS I REMEMBER ABOUT THE USER:\n${memories.map(m => `• ${m}`).join('\n')}`;
+  }
 
   // Build conversation contents
   const contents: Array<{ role: string; parts: Array<{ text?: string; functionCall?: unknown; functionResponse?: unknown }> }> = [];
@@ -264,7 +317,7 @@ export async function sendChatMessage(
   const firstUserText = history.length === 0 ? userMessage : history[0].text;
   contents.push({
     role: 'user',
-    parts: [{ text: `${SYSTEM_PROMPT}\n\n${portfolioContext}\n\n---\n\nUser question: ${firstUserText}` }],
+    parts: [{ text: `${systemBlock}\n\n${portfolioContext}\n\n---\n\nUser question: ${firstUserText}` }],
   });
 
   if (history.length > 0) {
@@ -304,7 +357,12 @@ export async function sendChatMessage(
 
     // Second call to get natural language response
     const secondResponse = await callGemini(key, contents) as GeminiResponse;
-    const text2 = secondResponse?.candidates?.[0]?.content?.parts?.[0]?.text || 'Done!';
+    const rawText2 = secondResponse?.candidates?.[0]?.content?.parts?.[0]?.text || 'Done!';
+    const { clean: text2, facts: facts2 } = extractAndStripMemory(rawText2);
+    if (facts2.length > 0) {
+      const existing = await loadMemories();
+      await saveMemories([...existing, ...facts2]);
+    }
     const actionLabel = fc.name === 'create_goal'
       ? `Created goal: ${fc.args.name}`
       : `Created retirement scenario: ${fc.args.name}`;
@@ -312,11 +370,16 @@ export async function sendChatMessage(
   }
 
   // Plain text response
-  const text = part?.text;
-  if (!text) {
+  const rawText = part?.text;
+  if (!rawText) {
     throw new Error('No response from Gemini');
   }
-  return { text };
+  const { clean, facts } = extractAndStripMemory(rawText);
+  if (facts.length > 0) {
+    const existing = await loadMemories();
+    await saveMemories([...existing, ...facts]);
+  }
+  return { text: clean };
 }
 
 interface GeminiPart {
