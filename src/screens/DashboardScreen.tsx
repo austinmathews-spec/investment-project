@@ -17,6 +17,8 @@ import { formatCurrency, formatCurrencyDecimal, formatDate, formatDateLong, acco
 import LargeChart from '../components/LargeChart';
 import MiniChart from '../components/MiniChart';
 import ProgressBar from '../components/ProgressBar';
+import PieChart from '../components/PieChart';
+import BarChart from '../components/BarChart';
 
 export default function DashboardScreen() {
   const { width: screenWidth } = useWindowDimensions();
@@ -206,6 +208,63 @@ export default function DashboardScreen() {
           })}
         </View>
       </View>
+
+      {/* Analytics */}
+      {visibleAccounts.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Analytics</Text>
+          <View style={styles.analyticsRow}>
+            <View style={styles.analyticsCard}>
+              <PieChart
+                title="Allocation"
+                data={(() => {
+                  const typeColors: Record<string, string> = {
+                    '401k': '#6846EB',
+                    roth_ira: '#00AAFF',
+                    traditional_ira: '#3D7FFF',
+                    savings: '#00C805',
+                    checking: '#00D4AA',
+                    crypto: '#FFB800',
+                    brokerage: '#FF5000',
+                    hsa: '#E91E63',
+                    '529': '#9C27B0',
+                    other: '#9DA0A6',
+                  };
+                  const groups: Record<string, number> = {};
+                  visibleAccounts.forEach(a => {
+                    const label = accountTypeLabel(a.type);
+                    groups[label] = (groups[label] || 0) + a.balance;
+                  });
+                  return Object.entries(groups)
+                    .filter(([, v]) => v > 0)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([label, value]) => {
+                      const typeKey = Object.entries({ checking: 'Checking', savings: 'Savings', brokerage: 'Brokerage', traditional_ira: 'Traditional IRA', roth_ira: 'Roth IRA', '401k': '401(k)', hsa: 'HSA', '529': '529 Plan', crypto: 'Crypto', other: 'Other' }).find(([, v]) => v === label)?.[0] || 'other';
+                      return { label, value, color: typeColors[typeKey] || '#9DA0A6' };
+                    });
+                })()}
+                size={160}
+              />
+            </View>
+            <View style={styles.analyticsCard}>
+              <BarChart
+                title="By Account"
+                data={visibleAccounts
+                  .filter(a => a.balance > 0)
+                  .sort((a, b) => b.balance - a.balance)
+                  .slice(0, 8)
+                  .map((a, i) => ({
+                    label: a.name,
+                    value: a.balance,
+                    color: Colors.goalColors[i % Colors.goalColors.length],
+                  }))}
+                width={Math.min(contentWidth - 40, 450)}
+                height={200}
+              />
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Goals — tiered & prioritized */}
       {sortedGoals.length > 0 && (
@@ -702,5 +761,15 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontSize: FontSizes.xs,
     fontWeight: '700',
+  },
+  analyticsRow: {
+    gap: Spacing.lg,
+  },
+  analyticsCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
 });

@@ -20,6 +20,7 @@ export interface Account {
   institution: string;
   lastUpdated: string; // ISO date
   sourceTable: SourceTable;
+  interestRate?: number; // annual rate as decimal, e.g. 0.045 for 4.5%
 }
 
 export interface NetWorthSnapshot {
