@@ -13,7 +13,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { AppData, Goal } from '../types';
 import { loadAppData, syncWithAirtable, loadAirtableConfig, reorderGoals } from '../storage';
-import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel, formatAgeYear } from '../utils/format';
+import { formatCurrency, formatCurrencyDecimal, formatDate, formatDateLong, accountTypeLabel, formatAgeYear } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 import MiniChart from '../components/MiniChart';
 import ProgressBar from '../components/ProgressBar';
@@ -102,9 +102,12 @@ export default function DashboardScreen() {
     setData(updated);
   };
 
-  // Emergency runway: based on Emergency HYS only
-  const emergencyAccount = data.accounts.find(a => a.name.toLowerCase().includes('emergency'));
-  const emergencyBalance = emergencyAccount ? emergencyAccount.balance : 0;
+  // Emergency runway: Emergency HYS + Crypto Strike
+  const emergencyAccounts = data.accounts.filter(a => {
+    const lower = a.name.toLowerCase();
+    return lower.includes('emergency') || lower.includes('crypto strike');
+  });
+  const emergencyBalance = emergencyAccounts.reduce((sum, a) => sum + a.balance, 0);
   const emergencyRunwayMonths = totalMonthlyExpenses > 0 ? emergencyBalance / totalMonthlyExpenses : 0;
 
   // Data date (most recent snapshot or account update)
@@ -258,7 +261,15 @@ export default function DashboardScreen() {
                     </Text>
                   )}
                 </View>
-                <Text style={styles.goalFooterText}>{formatAgeYear(goal.targetDate)}</Text>
+                <View style={styles.goalDateRow}>
+                  <Feather name="calendar" size={12} color={Colors.accent} />
+                  <Text style={styles.goalDateText}>
+                    {formatDateLong(goal.targetDate)} · {formatAgeYear(goal.targetDate)}
+                  </Text>
+                  {monthsLeft > 0 && (
+                    <Text style={styles.goalDateCountdown}>{monthsLeft}mo</Text>
+                  )}
+                </View>
                 {goal.milestoneReward && (
                   <View style={styles.rewardBadge}>
                     <Feather name="gift" size={12} color={Colors.accent} />
@@ -291,10 +302,12 @@ export default function DashboardScreen() {
           </View>
           <ProgressBar progress={Math.min(emergencyRunwayMonths / 6, 1)} color={emergencyRunwayMonths >= 6 ? Colors.positive : Colors.warning} height={6} />
           <View style={styles.runwayDetails}>
-            <View style={styles.runwayDetail}>
-              <Text style={styles.runwayDetailLabel}>Emergency HYS</Text>
-              <Text style={styles.runwayDetailValue}>{formatCurrency(emergencyBalance)}</Text>
-            </View>
+            {emergencyAccounts.map(a => (
+              <View key={a.id} style={styles.runwayDetail}>
+                <Text style={styles.runwayDetailLabel}>{a.name}</Text>
+                <Text style={styles.runwayDetailValue}>{formatCurrency(a.balance)}</Text>
+              </View>
+            ))}
             <View style={styles.runwayDetail}>
               <Text style={styles.runwayDetailLabel}>Monthly Expenses</Text>
               <Text style={styles.runwayDetailValue}>{formatCurrency(totalMonthlyExpenses)}</Text>
@@ -583,6 +596,23 @@ const styles = StyleSheet.create({
   goalFooterText: {
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
+  },
+  goalDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  goalDateText: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
+    flex: 1,
+  },
+  goalDateCountdown: {
+    color: Colors.accent,
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
   },
   rewardBadge: {
     flexDirection: 'row',

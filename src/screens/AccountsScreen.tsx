@@ -43,7 +43,7 @@ export default function AccountsScreen() {
   const [institution, setInstitution] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('All');
-  const [typeFilter, setTypeFilter] = useState('All');
+  const [typeFilters, setTypeFilters] = useState<string[]>([]);
   const navigation = useNavigation<any>();
 
   const loadData = useCallback(async () => {
@@ -92,11 +92,11 @@ export default function AccountsScreen() {
 
   const filteredAccounts = data.accounts.filter(a => {
     if (sourceFilter !== 'All' && a.sourceTable !== sourceFilter) return false;
-    if (typeFilter !== 'All' && accountTypeLabel(a.type) !== typeFilter) return false;
+    if (typeFilters.length > 0 && !typeFilters.includes(accountTypeLabel(a.type))) return false;
     return true;
   });
   const filteredBalance = filteredAccounts.reduce((sum, a) => sum + a.balance, 0);
-  const isFiltered = sourceFilter !== 'All' || typeFilter !== 'All';
+  const isFiltered = sourceFilter !== 'All' || typeFilters.length > 0;
 
   return (
     <View style={styles.container}>
@@ -120,14 +120,15 @@ export default function AccountsScreen() {
           onSelect={setSourceFilter}
         />
         <FilterChips
+          multiSelect
           options={['All', ...Array.from(new Set(
             (sourceFilter === 'All'
               ? data.accounts
               : data.accounts.filter(a => a.sourceTable === sourceFilter)
             ).map(a => accountTypeLabel(a.type))
           ))]}
-          selected={typeFilter}
-          onSelect={setTypeFilter}
+          selectedMulti={typeFilters}
+          onSelectMulti={setTypeFilters}
         />
 
         {/* Account Tiles */}
