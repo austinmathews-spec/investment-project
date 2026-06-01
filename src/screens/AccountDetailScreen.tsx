@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { Account, AccountType, AppData } from '../types';
 import { loadAppData, saveAccount } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
 import LargeChart from '../components/LargeChart';
+import MiniChart from '../components/MiniChart';
 import InputField from '../components/InputField';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -32,6 +33,8 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+const FORECAST_YEARS = [1, 3, 5, 10];
+
 export default function AccountDetailScreen() {
   const route = useRoute<any>();
   const { accountId } = route.params;
@@ -45,6 +48,7 @@ export default function AccountDetailScreen() {
   const [editType, setEditType] = useState<AccountType>('checking');
   const [editInterestRate, setEditInterestRate] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [forecastYears, setForecastYears] = useState(5);
 
   useFocusEffect(
     useCallback(() => {
@@ -56,6 +60,8 @@ export default function AccountDetailScreen() {
 
   const account = data.accounts.find((a) => a.id === accountId);
   if (!account) return null;
+
+  const contentWidth = Math.min(screenWidth, 640);
 
   // Build historical balance data from snapshots
   const history = data.snapshots
@@ -77,6 +83,8 @@ export default function AccountDetailScreen() {
     value: h.balance,
   }));
 
+  const sparklineData = history.map(h => h.balance);
+
   // Growth calculations
   const firstBalance = history.length > 0 ? history[0].balance : account.balance;
   const currentBalance = account.balance;
@@ -84,15 +92,44 @@ export default function AccountDetailScreen() {
   const totalChangePct = firstBalance !== 0 ? totalChange / Math.abs(firstBalance) : 0;
   const isPositive = totalChange >= 0;
 
-  // Period-over-period changes
+  // Period-over-period changes (latest 5 only)
   const periodChanges = history.length > 1
     ? history.slice(1).map((h, i) => {
         const prev = history[i];
         const change = h.balance - prev.balance;
         const pct = prev.balance !== 0 ? change / Math.abs(prev.balance) : 0;
         return { from: prev.date, to: h.date, fromBal: prev.balance, toBal: h.balance, change, pct };
-      }).reverse()
+      }).reverse().slice(0, 5)
     : [];
+
+  // Forecast projection (compound interest)
+  const hasRate = account.interestRate !== undefined && account.interestRate > 0;
+  const rate = hasRate ? account.interestRate! : 0;
+  const forecastData = useMemo(() => {
+    if (!hasRate) return [];
+    const points: { label: string; value: number }[] = [];
+    const now = new Date();
+    points.push({ label: 'Now', value: currentBalance });
+    const months = forecastYears * 12;
+    const step = Math.max(1, Math.floor(months / 24));
+    for (let m = step; m <= months; m += step) {
+      const val = currentBalance * Math.pow(1 + rate / 12, m);
+      const d = new Date(now.getFullYear(), now.getMonth() + m);
+      const label = `${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear()}`;
+      points.push({ label, value: val });
+    }
+    // Ensure last point
+    const finalVal = currentBalance * Math.pow(1 + rate / 12, months);
+    const finalDate = new Date(now.getFullYear(), now.getMonth() + months);
+    const lastPoint = points[points.length - 1];
+    if (lastPoint && lastPoint.value !== finalVal) {
+      points.push({ label: `${finalDate.toLocaleString('default', { month: 'short' })} ${finalDate.getFullYear()}`, value: finalVal });
+    }
+    return points;
+  }, [hasRate, rate, currentBalance, forecastYears]);
+
+  const projectedBalance = hasRate ? currentBalance * Math.pow(1 + rate / 12, forecastYears * 12) : 0;
+  const projectedGain = projectedBalance - currentBalance;
 
   const openEdit = () => {
     setEditName(account.name);
@@ -125,123 +162,182 @@ export default function AccountDetailScreen() {
     setEditModalVisible(false);
   };
 
+  const chartWidth = Math.min(screenWidth - 32, 608);
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
-        <View style={styles.contentInner}>
-        {/* Hero */}
-        <View style={styles.hero}>
-          <Text style={[styles.heroBalance, account.balance < 0 && { color: Colors.negative }]}>
-            {formatCurrencyDecimal(account.balance)}
-          </Text>
-          {history.length > 1 && (
-            <View style={styles.changeRow}>
-              <View style={[styles.changeBadge, { backgroundColor: isPositive ? Colors.accentDim : 'rgba(255,80,0,0.08)' }]}>
-                <Feather
-                  name={isPositive ? 'trending-up' : 'trending-down'}
-                  size={14}
-                  color={isPositive ? Colors.positive : Colors.negative}
-                />
-                <Text style={[styles.changeText, { color: isPositive ? Colors.positive : Colors.negative }]}>
-                  {isPositive ? '+' : ''}{formatCurrency(totalChange)} ({isPositive ? '+' : ''}{(totalChangePct * 100).toFixed(1)}%)
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={[styles.contentInner, { maxWidth: contentWidth }]}>
+
+          {/* ── Hero ── */}
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroLeft}>
+                <Text style={[styles.heroBalance, account.balance < 0 && { color: Colors.negative }]}>
+                  {formatCurrencyDecimal(account.balance)}
                 </Text>
+                {history.length > 1 && (
+                  <View style={[styles.changeBadge, { backgroundColor: isPositive ? Colors.accentDim : 'rgba(255,80,0,0.08)' }]}>
+                    <Feather
+                      name={isPositive ? 'trending-up' : 'trending-down'}
+                      size={12}
+                      color={isPositive ? Colors.positive : Colors.negative}
+                    />
+                    <Text style={[styles.changeText, { color: isPositive ? Colors.positive : Colors.negative }]}>
+                      {isPositive ? '+' : ''}{formatCurrency(totalChange)} ({isPositive ? '+' : ''}{(totalChangePct * 100).toFixed(1)}%)
+                    </Text>
+                  </View>
+                )}
               </View>
-              <Text style={styles.changePeriod}>all time</Text>
+              {sparklineData.length >= 2 && (
+                <MiniChart
+                  data={sparklineData}
+                  width={100}
+                  height={40}
+                  color={isPositive ? Colors.positive : Colors.negative}
+                  showFill={false}
+                />
+              )}
+            </View>
+            <View style={styles.heroMeta}>
+              <View style={styles.metaChip}>
+                <Feather name="briefcase" size={11} color={Colors.textSecondary} />
+                <Text style={styles.metaText}>{accountTypeLabel(account.type)}</Text>
+              </View>
+              {account.institution ? (
+                <View style={styles.metaChip}>
+                  <Feather name="home" size={11} color={Colors.textSecondary} />
+                  <Text style={styles.metaText}>{account.institution}</Text>
+                </View>
+              ) : null}
+              {hasRate && (
+                <View style={[styles.metaChip, { backgroundColor: Colors.accentDim }]}>
+                  <Feather name="percent" size={11} color={Colors.accent} />
+                  <Text style={[styles.metaText, { color: Colors.accent, fontWeight: '600' }]}>{(rate * 100).toFixed(2)}% APY</Text>
+                </View>
+              )}
+              <TouchableOpacity onPress={openEdit} style={styles.editChip}>
+                <Feather name="edit-2" size={11} color={Colors.accent} />
+                <Text style={[styles.metaText, { color: Colors.accent, fontWeight: '600' }]}>Edit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ── Balance History Chart ── */}
+          {chartData.length >= 2 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>BALANCE HISTORY</Text>
+              <View style={styles.chartCard}>
+                <LargeChart
+                  data={chartData}
+                  width={chartWidth}
+                  height={180}
+                  color={Colors.accent}
+                />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptyChart}>
+              <Feather name="bar-chart-2" size={24} color={Colors.textTertiary} />
+              <Text style={styles.emptyText}>Save snapshots to see balance trends</Text>
             </View>
           )}
-        </View>
 
-        {/* Balance History Chart */}
-        {chartData.length >= 2 && (
-          <View style={styles.chartContainer}>
-            <LargeChart
-              data={chartData}
-              width={Math.min(screenWidth - 40, 800)}
-              height={220}
-              color={Colors.accent}
-            />
-          </View>
-        )}
-
-        {chartData.length < 2 && (
-          <View style={styles.emptyChart}>
-            <Feather name="bar-chart-2" size={32} color={Colors.textTertiary} />
-            <Text style={styles.emptyText}>
-              Save at least 2 snapshots to see balance trends
-            </Text>
-          </View>
-        )}
-
-        {/* Edit Button */}
-        <TouchableOpacity style={styles.editButton} onPress={openEdit}>
-          <Feather name="edit-2" size={16} color={Colors.accent} />
-          <Text style={styles.editButtonText}>Edit Account</Text>
-        </TouchableOpacity>
-
-        {/* Account Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Details</Text>
-          <View style={styles.detailTile}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Type</Text>
-              <Text style={styles.detailValue}>{accountTypeLabel(account.type)}</Text>
-            </View>
-            {account.institution ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Institution</Text>
-                <Text style={styles.detailValue}>{account.institution}</Text>
+          {/* ── Interest Rate Forecast ── */}
+          {hasRate && forecastData.length >= 2 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>PROJECTED GROWTH</Text>
+                <View style={styles.yearTabs}>
+                  {FORECAST_YEARS.map(y => (
+                    <TouchableOpacity
+                      key={y}
+                      style={[styles.yearTab, forecastYears === y && styles.yearTabActive]}
+                      onPress={() => setForecastYears(y)}
+                    >
+                      <Text style={[styles.yearTabText, forecastYears === y && styles.yearTabTextActive]}>{y}Y</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            ) : null}
-            {account.interestRate !== undefined && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Interest Rate</Text>
-                <Text style={styles.detailValue}>{(account.interestRate * 100).toFixed(2)}%</Text>
-              </View>
-            )}
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Last Updated</Text>
-              <Text style={styles.detailValue}>{formatDate(account.lastUpdated)}</Text>
-            </View>
-            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-              <Text style={styles.detailLabel}>Data Points</Text>
-              <Text style={styles.detailValue}>{history.length} snapshot{history.length !== 1 ? 's' : ''}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Period Changes */}
-        {periodChanges.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>History</Text>
-            {periodChanges.map((c, i) => {
-              const cPositive = c.change >= 0;
-              return (
-                <View key={i} style={styles.periodTile}>
+              <View style={styles.chartCard}>
+                <View style={styles.projectionSummary}>
                   <View>
-                    <Text style={styles.periodDates}>
-                      {formatDate(c.from)} → {formatDate(c.to)}
-                    </Text>
-                    <Text style={styles.periodBalance}>
-                      {formatCurrencyDecimal(c.toBal)}
-                    </Text>
+                    <Text style={styles.projLabel}>Projected in {forecastYears}yr</Text>
+                    <Text style={styles.projValue}>{formatCurrencyDecimal(projectedBalance)}</Text>
                   </View>
-                  <View style={styles.periodRight}>
-                    <Text style={[styles.periodChange, { color: cPositive ? Colors.positive : Colors.negative }]}>
-                      {cPositive ? '+' : ''}{formatCurrency(c.change)}
-                    </Text>
-                    <Text style={[styles.periodPct, { color: cPositive ? Colors.positive : Colors.negative }]}>
-                      {cPositive ? '+' : ''}{(c.pct * 100).toFixed(1)}%
-                    </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.projLabel}>Interest earned</Text>
+                    <Text style={[styles.projValue, { color: Colors.positive }]}>+{formatCurrencyDecimal(projectedGain)}</Text>
                   </View>
                 </View>
-              );
-            })}
+                <LargeChart
+                  data={forecastData}
+                  width={chartWidth}
+                  height={160}
+                  color="#6846EB"
+                  showLabels
+                />
+              </View>
+            </View>
+          )}
+
+          {/* ── Details Grid ── */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>DETAILS</Text>
+            <View style={styles.detailsGrid}>
+              <View style={styles.detailCell}>
+                <Text style={styles.detailCellLabel}>Last Updated</Text>
+                <Text style={styles.detailCellValue}>{formatDate(account.lastUpdated)}</Text>
+              </View>
+              <View style={styles.detailCell}>
+                <Text style={styles.detailCellLabel}>Data Points</Text>
+                <Text style={styles.detailCellValue}>{history.length}</Text>
+              </View>
+              {hasRate && (
+                <View style={styles.detailCell}>
+                  <Text style={styles.detailCellLabel}>Monthly Yield</Text>
+                  <Text style={[styles.detailCellValue, { color: Colors.positive }]}>
+                    +{formatCurrencyDecimal(currentBalance * rate / 12)}/mo
+                  </Text>
+                </View>
+              )}
+              {hasRate && (
+                <View style={styles.detailCell}>
+                  <Text style={styles.detailCellLabel}>Annual Yield</Text>
+                  <Text style={[styles.detailCellValue, { color: Colors.positive }]}>
+                    +{formatCurrencyDecimal(currentBalance * rate)}/yr
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        )}
+
+          {/* ── Period Changes ── */}
+          {periodChanges.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>RECENT CHANGES</Text>
+              <View style={styles.historyCard}>
+                {periodChanges.map((c, i) => {
+                  const cPositive = c.change >= 0;
+                  return (
+                    <View key={i} style={[styles.historyRow, i < periodChanges.length - 1 && styles.historyRowBorder]}>
+                      <Text style={styles.historyDate}>{formatDate(c.to)}</Text>
+                      <Text style={styles.historyBal}>{formatCurrencyDecimal(c.toBal)}</Text>
+                      <Text style={[styles.historyChange, { color: cPositive ? Colors.positive : Colors.negative }]}>
+                        {cPositive ? '+' : ''}{formatCurrency(c.change)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
         </View>
       </ScrollView>
 
-      {/* Edit Modal */}
+      {/* ── Edit Modal ── */}
       <Modal visible={editModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalScroll} bounces={false} keyboardShouldPersistTaps="handled">
@@ -312,17 +408,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   content: {
-    paddingBottom: Spacing.xxl,
+    paddingBottom: Spacing.xl,
+    alignItems: 'center',
   },
   contentInner: {
-    maxWidth: 960,
     width: '100%',
     alignSelf: 'center',
   },
+
+  // ── Hero ──
   hero: {
-    alignItems: 'center',
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
+    padding: Spacing.lg,
+    paddingBottom: Spacing.md,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  heroLeft: {
+    flex: 1,
   },
   heroBalance: {
     fontSize: FontSizes.hero,
@@ -330,120 +435,192 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     letterSpacing: -1,
   },
-  changeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-    gap: Spacing.sm,
-  },
   changeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.sm + 2,
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
     borderRadius: BorderRadius.round,
     gap: 4,
+    marginTop: 6,
   },
   changeText: {
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
     fontWeight: '600',
   },
-  changePeriod: {
-    fontSize: FontSizes.sm,
-    color: Colors.textTertiary,
+  heroMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: Spacing.sm + 2,
   },
-  chartContainer: {
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.tileBg,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.round,
+  },
+  metaText: {
+    fontSize: FontSizes.xs,
+    color: Colors.textSecondary,
+  },
+  editChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.round,
+    borderWidth: 1,
+    borderColor: Colors.accentDim,
+  },
+
+  // ── Sections ──
+  section: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  sectionLabel: {
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+    color: Colors.textTertiary,
+    letterSpacing: 0.8,
+    marginBottom: Spacing.sm,
+  },
+
+  // ── Charts ──
+  chartCard: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    overflow: 'hidden',
   },
   emptyChart: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.xxl,
+    justifyContent: 'center',
     gap: Spacing.sm,
+    paddingVertical: Spacing.xl,
+    marginHorizontal: Spacing.lg,
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
   },
   emptyText: {
     color: Colors.textTertiary,
     fontSize: FontSizes.sm,
-    textAlign: 'center',
-    paddingHorizontal: Spacing.xxl,
   },
-  editButton: {
+
+  // ── Forecast year tabs ──
+  yearTabs: {
     flexDirection: 'row',
-    backgroundColor: Colors.accentDim,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.sm + 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
+    gap: 4,
+  },
+  yearTab: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.round,
+    backgroundColor: Colors.tileBg,
+  },
+  yearTabActive: {
+    backgroundColor: Colors.accent,
+  },
+  yearTabText: {
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  yearTabTextActive: {
+    color: '#FFF',
+  },
+  projectionSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
+  },
+  projLabel: {
+    fontSize: FontSizes.xs,
+    color: Colors.textTertiary,
+    marginBottom: 2,
+  },
+  projValue: {
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+
+  // ── Details Grid ──
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
-  editButtonText: {
-    color: Colors.accent,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  section: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  sectionTitle: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-    marginBottom: Spacing.md,
-  },
-  detailTile: {
+  detailCell: {
     backgroundColor: Colors.tileBg,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
+    minWidth: 140,
+    flex: 1,
   },
-  detailRow: {
+  detailCellLabel: {
+    fontSize: FontSizes.xs,
+    color: Colors.textTertiary,
+    marginBottom: 4,
+  },
+  detailCellValue: {
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+
+  // ── History ──
+  historyCard: {
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+  },
+  historyRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.md,
+  },
+  historyRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  detailLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-  },
-  detailValue: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  periodTile: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.tileBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  periodDates: {
-    color: Colors.textSecondary,
+  historyDate: {
+    flex: 1,
     fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
   },
-  periodBalance: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
+  historyBal: {
+    flex: 1,
+    fontSize: FontSizes.sm,
     fontWeight: '600',
-    marginTop: 2,
+    color: Colors.textPrimary,
+    textAlign: 'center',
   },
-  periodRight: {
-    alignItems: 'flex-end',
+  historyChange: {
+    flex: 1,
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
+    textAlign: 'right',
   },
-  periodChange: {
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
-  periodPct: {
-    fontSize: FontSizes.xs,
-    marginTop: 2,
-  },
+
+  // ── Modal ──
   modalOverlay: {
     flex: 1,
     backgroundColor: Colors.overlay,
@@ -529,5 +706,4 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: '600',
   },
-
 });

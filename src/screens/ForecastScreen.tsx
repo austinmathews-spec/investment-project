@@ -54,6 +54,7 @@ export default function ForecastScreen() {
   const [retInflation, setRetInflation] = useState('');
   const [retIncome, setRetIncome] = useState('');
   const [retLinkedAccountIds, setRetLinkedAccountIds] = useState<string[]>([]);
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     const appData = await loadAppData();
@@ -300,14 +301,23 @@ export default function ForecastScreen() {
                 <SliderInput label={`Retirement Age (${yearFromAge(parseInt(retRetireAge) || 60)})`} value={parseInt(retRetireAge) || 60} min={40} max={85} step={1} formatValue={fmtAge} onValueChange={v => setRetRetireAge(v.toString())} />
               </View>
 
-              {/* Account Picker */}
+              {/* Account Picker — collapsible */}
               <View style={styles.sliderSection}>
-                <Text style={styles.sliderSectionTitle}>INCLUDE ACCOUNTS</Text>
-                <Text style={styles.accountPickerHint}>
-                  {retLinkedAccountIds.length === 0
-                    ? 'All accounts selected by default'
-                    : `${retLinkedAccountIds.length} account${retLinkedAccountIds.length > 1 ? 's' : ''} · ${formatCurrency(linkedSavingsTotal)}`}
-                </Text>
+                <TouchableOpacity
+                  style={styles.accountPickerToggle}
+                  onPress={() => setAccountPickerOpen(!accountPickerOpen)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sliderSectionTitle}>INCLUDE ACCOUNTS</Text>
+                    <Text style={styles.accountPickerHint}>
+                      {retLinkedAccountIds.length === 0
+                        ? `All ${data.accounts.length} accounts · ${formatCurrency(data.accounts.reduce((s, a) => s + a.balance, 0))}`
+                        : `${retLinkedAccountIds.length} of ${data.accounts.length} · ${formatCurrency(linkedSavingsTotal)}`}
+                    </Text>
+                  </View>
+                  <Feather name={accountPickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textSecondary} />
+                </TouchableOpacity>
                 {(() => {
                   const relevantAccts = retLinkedAccountIds.length > 0
                     ? data.accounts.filter(a => retLinkedAccountIds.includes(a.id))
@@ -320,14 +330,13 @@ export default function ForecastScreen() {
                     : 0;
                   return (
                     <Text style={[styles.accountPickerHint, { color: Colors.accent, marginTop: Spacing.xs }]}>
-                      Weighted avg rate: {(weightedRate * 100).toFixed(1)}% (from {withRate.length} account{withRate.length > 1 ? 's' : ''})
+                      Weighted avg rate: {(weightedRate * 100).toFixed(1)}%
                     </Text>
                   );
                 })()}
-                <ScrollView style={styles.accountPickerList} nestedScrollEnabled>
-                  {data.accounts
-
-                    .map(account => {
+                {accountPickerOpen && (
+                  <View style={styles.accountPickerList}>
+                    {data.accounts.map(account => {
                       const isLinked = retLinkedAccountIds.includes(account.id);
                       return (
                         <TouchableOpacity
@@ -336,29 +345,16 @@ export default function ForecastScreen() {
                           onPress={() => toggleRetAccount(account.id)}
                           activeOpacity={0.7}
                         >
-                          <View style={styles.accountPickerLeft}>
-                            <View style={[styles.accountPickerCheck, isLinked && styles.accountPickerCheckActive]}>
-                              {isLinked && <Feather name="check" size={12} color="#FFF" />}
-                            </View>
-                            <View>
-                              <Text style={styles.accountPickerName}>{account.name}</Text>
-                              <Text style={styles.accountPickerMeta}>
-                                {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
-                              </Text>
-                            </View>
+                          <View style={[styles.accountPickerCheck, isLinked && styles.accountPickerCheckActive]}>
+                            {isLinked && <Feather name="check" size={10} color="#FFF" />}
                           </View>
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
-                            {account.interestRate !== undefined && account.interestRate > 0 && (
-                              <Text style={{ fontSize: 10, color: Colors.accent, fontWeight: '600' }}>
-                                {(account.interestRate * 100).toFixed(1)}% APY
-                              </Text>
-                            )}
-                          </View>
+                          <Text style={styles.accountPickerName} numberOfLines={1}>{account.name}</Text>
+                          <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
                         </TouchableOpacity>
                       );
                     })}
-                </ScrollView>
+                  </View>
+                )}
               </View>
 
               <View style={styles.sliderSection}>
@@ -542,38 +538,36 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: Spacing.md,
   },
+  accountPickerToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
   accountPickerHint: {
     color: Colors.textTertiary,
-    fontSize: FontSizes.sm,
-    marginBottom: Spacing.sm,
+    fontSize: FontSizes.xs,
   },
   accountPickerList: {
-    maxHeight: 220,
     backgroundColor: Colors.tileBg,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.sm,
     padding: Spacing.xs,
+    marginTop: Spacing.sm,
   },
   accountPickerItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+    paddingVertical: 6,
     paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.sm,
   },
   accountPickerItemActive: {
     backgroundColor: Colors.accentDim,
   },
-  accountPickerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    flex: 1,
-  },
   accountPickerCheck: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     borderColor: Colors.border,
     alignItems: 'center',
@@ -584,18 +578,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.accent,
   },
   accountPickerName: {
+    flex: 1,
     color: Colors.textPrimary,
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
     fontWeight: '500',
   },
-  accountPickerMeta: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: 1,
-  },
   accountPickerBalance: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    fontSize: FontSizes.xs,
     fontWeight: '600',
   },
 });
