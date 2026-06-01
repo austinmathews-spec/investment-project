@@ -43,6 +43,7 @@ export default function AccountDetailScreen() {
   const [editBalance, setEditBalance] = useState('');
   const [editInstitution, setEditInstitution] = useState('');
   const [editType, setEditType] = useState<AccountType>('checking');
+  const [editInterestRate, setEditInterestRate] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
 
   useFocusEffect(
@@ -98,6 +99,7 @@ export default function AccountDetailScreen() {
     setEditBalance(account.balance.toString());
     setEditInstitution(account.institution);
     setEditType(account.type);
+    setEditInterestRate(account.interestRate !== undefined ? (account.interestRate * 100).toFixed(2) : '');
     setShowTypePicker(false);
     setEditModalVisible(true);
   };
@@ -108,12 +110,14 @@ export default function AccountDetailScreen() {
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
       return;
     }
+    const parsedRate = parseFloat(editInterestRate);
     const updated: Account = {
       ...account,
       name: editName.trim(),
       balance: parseFloat(editBalance) || 0,
       institution: editInstitution.trim(),
       type: editType,
+      interestRate: !isNaN(parsedRate) && parsedRate > 0 ? parsedRate / 100 : undefined,
       lastUpdated: new Date().toISOString().split('T')[0],
     };
     const newData = await saveAccount(updated);
@@ -188,6 +192,12 @@ export default function AccountDetailScreen() {
                 <Text style={styles.detailValue}>{account.institution}</Text>
               </View>
             ) : null}
+            {account.interestRate !== undefined && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Interest Rate</Text>
+                <Text style={styles.detailValue}>{(account.interestRate * 100).toFixed(2)}%</Text>
+              </View>
+            )}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Last Updated</Text>
               <Text style={styles.detailValue}>{formatDate(account.lastUpdated)}</Text>
@@ -264,6 +274,14 @@ export default function AccountDetailScreen() {
               <Text style={styles.typePickerText}>{accountTypeLabel(editType)}</Text>
               <Feather name={showTypePicker ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textSecondary} />
             </TouchableOpacity>
+            <InputField
+              label="Annual Interest Rate (%)"
+              value={editInterestRate}
+              onChangeText={setEditInterestRate}
+              keyboardType="decimal-pad"
+              placeholder="e.g. 4.5"
+            />
+
             {showTypePicker && (
               <ScrollView style={styles.typeList} nestedScrollEnabled>
                 {ACCOUNT_TYPES.map((t) => (

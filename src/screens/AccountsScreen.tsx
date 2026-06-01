@@ -163,6 +163,7 @@ export default function AccountsScreen() {
                   <Text style={styles.accountTileName}>{account.name}</Text>
                   <Text style={styles.accountTileMeta}>
                     {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+                    {account.interestRate !== undefined && account.interestRate > 0 ? ` · ${(account.interestRate * 100).toFixed(1)}% APY` : ''}
                     {account.lastUpdated ? ` · ${formatDate(account.lastUpdated)}` : ''}
                   </Text>
                 </View>
