@@ -308,6 +308,22 @@ export default function ForecastScreen() {
                     ? 'All accounts selected by default'
                     : `${retLinkedAccountIds.length} account${retLinkedAccountIds.length > 1 ? 's' : ''} · ${formatCurrency(linkedSavingsTotal)}`}
                 </Text>
+                {(() => {
+                  const relevantAccts = retLinkedAccountIds.length > 0
+                    ? data.accounts.filter(a => retLinkedAccountIds.includes(a.id))
+                    : data.accounts;
+                  const withRate = relevantAccts.filter(a => a.interestRate !== undefined && a.interestRate > 0);
+                  if (withRate.length === 0) return null;
+                  const totalBal = withRate.reduce((s, a) => s + a.balance, 0);
+                  const weightedRate = totalBal > 0
+                    ? withRate.reduce((s, a) => s + (a.interestRate! * a.balance), 0) / totalBal
+                    : 0;
+                  return (
+                    <Text style={[styles.accountPickerHint, { color: Colors.accent, marginTop: Spacing.xs }]}>
+                      Weighted avg rate: {(weightedRate * 100).toFixed(1)}% (from {withRate.length} account{withRate.length > 1 ? 's' : ''})
+                    </Text>
+                  );
+                })()}
                 <ScrollView style={styles.accountPickerList} nestedScrollEnabled>
                   {data.accounts
 
@@ -331,7 +347,14 @@ export default function ForecastScreen() {
                               </Text>
                             </View>
                           </View>
-                          <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
+                            {account.interestRate !== undefined && account.interestRate > 0 && (
+                              <Text style={{ fontSize: 10, color: Colors.accent, fontWeight: '600' }}>
+                                {(account.interestRate * 100).toFixed(1)}% APY
+                              </Text>
+                            )}
+                          </View>
                         </TouchableOpacity>
                       );
                     })}
