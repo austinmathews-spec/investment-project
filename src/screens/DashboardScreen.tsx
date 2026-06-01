@@ -12,7 +12,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { AppData, Goal } from '../types';
-import { loadAppData, syncWithAirtable, loadAirtableConfig, reorderGoals } from '../storage';
+import { loadAppData, syncWithAirtable, loadAirtableConfig, reorderGoals, isDemoMode } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, formatDateLong, accountTypeLabel, formatAgeYear } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 import MiniChart from '../components/MiniChart';
@@ -125,6 +125,12 @@ export default function DashboardScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
     >
       <View style={[styles.contentInner, { maxWidth: contentMaxWidth, width: '100%' }]}>
+      {isDemoMode() && (
+        <View style={styles.demoBadge}>
+          <Feather name="play-circle" size={14} color={Colors.accent} />
+          <Text style={styles.demoBadgeText}>Demo Mode</Text>
+        </View>
+      )}
       {/* Net Worth Hero */}
       <View style={styles.heroSection}>
         <Text style={styles.heroLabel}>Net Worth</Text>
@@ -680,5 +686,21 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: FontSizes.md,
     fontWeight: '600',
+  },
+  demoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: Colors.accentDim,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    gap: 6,
+    marginTop: Spacing.sm,
+  },
+  demoBadgeText: {
+    color: Colors.accent,
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
   },
 });

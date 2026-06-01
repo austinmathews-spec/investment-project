@@ -12,19 +12,20 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (enteredPassword: string) => void;
   password: string;
+  demoPassword: string;
 }
 
-export default function LoginScreen({ onLogin, password }: LoginScreenProps) {
+export default function LoginScreen({ onLogin, password, demoPassword }: LoginScreenProps) {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = () => {
-    if (input === password) {
+    if (input === password || input.toLowerCase() === demoPassword) {
       setError('');
-      onLogin();
+      onLogin(input);
     } else {
       setError('Incorrect password');
       setInput('');

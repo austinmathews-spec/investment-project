@@ -19,8 +19,10 @@ import {
   clearAirtableConfig,
   syncWithAirtable,
   resetAppData,
+  isDemoMode,
 } from '../storage';
 import { AirtableConfig } from '../types';
+import { Feather } from '@expo/vector-icons';
 
 export default function SettingsScreen() {
   const [pat, setPat] = useState('');
@@ -124,6 +126,17 @@ export default function SettingsScreen() {
       contentContainerStyle={[styles.content, { alignItems: 'center' }]}
     >
       <View style={styles.contentInner}>
+      {isDemoMode() && (
+        <View style={styles.demoBanner}>
+          <Feather name="play-circle" size={20} color={Colors.accent} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.demoBannerTitle}>Demo Mode</Text>
+            <Text style={styles.demoBannerText}>
+              You're viewing sample data. Log out and use your password for live Airtable data.
+            </Text>
+          </View>
+        </View>
+      )}
       <Text style={styles.title}>Airtable Connection</Text>
       <Text style={styles.subtitle}>
         Connect to your Airtable base to sync accounts, snapshots, and expenses.
@@ -360,5 +373,24 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
     lineHeight: 20,
+  },
+  demoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.accentDim,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  demoBannerTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+    color: Colors.accent,
+  },
+  demoBannerText: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
 });

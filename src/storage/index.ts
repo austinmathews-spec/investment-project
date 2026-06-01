@@ -10,9 +10,22 @@ import {
   AppData,
 } from '../types';
 import { syncFromAirtable } from '../airtable/sync';
+import { getDemoData } from '../data/demoData';
 
 const STORAGE_KEY = '@sofi_dashboard_data';
 const CONFIG_KEY = '@sofi_airtable_config';
+
+// ─── Demo mode ───────────────────────────────────────────────────
+
+let _demoMode = false;
+
+export function setDemoMode(enabled: boolean): void {
+  _demoMode = enabled;
+}
+
+export function isDemoMode(): boolean {
+  return _demoMode;
+}
 
 const emptyData: AppData = {
   accounts: [],
@@ -33,7 +46,10 @@ export async function loadAirtableConfig(): Promise<AirtableConfig | null> {
   if (raw) return JSON.parse(raw) as AirtableConfig;
   // Fall back to environment variables (for Vercel deployment)
   if (ENV_PAT && ENV_BASE_ID) {
-    return { pat: ENV_PAT, baseId: ENV_BASE_ID };
+    const config: AirtableConfig = { pat: ENV_PAT, baseId: ENV_BASE_ID };
+    // Persist env-var config to AsyncStorage so it survives across sessions
+    await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    return config;
   }
   return null;
 }
@@ -49,6 +65,7 @@ export async function clearAirtableConfig(): Promise<void> {
 // ─── Core data persistence ───────────────────────────────────────
 
 export async function loadAppData(): Promise<AppData> {
+  if (_demoMode) return getDemoData();
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
   if (!raw) {
     return { accounts: [], snapshots: [], goals: [], retirementScenarios: [], forecastScenarios: [], expenses: [] };
@@ -77,6 +94,7 @@ export async function resetAppData(): Promise<AppData> {
 // ─── Airtable sync ───────────────────────────────────────────────
 
 export async function syncWithAirtable(): Promise<AppData> {
+  if (_demoMode) return getDemoData();
   const config = await loadAirtableConfig();
   if (!config || !config.pat || !config.baseId) {
     return loadAppData();
