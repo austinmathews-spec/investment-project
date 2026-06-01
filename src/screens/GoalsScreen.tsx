@@ -15,7 +15,8 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
 import { Goal, AppData } from '../types';
 import { loadAppData, saveGoal, deleteGoal } from '../storage';
-import { formatCurrency, formatCurrencyDecimal, accountTypeLabel, formatAgeYear } from '../utils/format';
+import { formatCurrency, formatCurrencyDecimal, formatDateLong, accountTypeLabel, formatAgeYear } from '../utils/format';
+import DatePickerField from '../components/DatePickerField';
 import Card from '../components/Card';
 import ProgressBar from '../components/ProgressBar';
 import InputField from '../components/InputField';
@@ -216,10 +217,15 @@ export default function GoalsScreen() {
                   )}
                 </View>
 
-                <Text style={styles.goalDate}>
-                  Target: {formatAgeYear(goal.targetDate)} · {targetDate.toLocaleDateString('en-US', { month: 'long' })}
-                  {monthsLeft > 0 ? ` (${monthsLeft} months)` : ' (past due)'}
-                </Text>
+                <View style={styles.goalDateRow}>
+                  <Feather name="calendar" size={14} color={Colors.accent} />
+                  <Text style={styles.goalDateText}>
+                    {formatDateLong(goal.targetDate)} · {formatAgeYear(goal.targetDate)}
+                  </Text>
+                  <Text style={[styles.goalDateCountdown, monthsLeft === 0 && { color: Colors.negative }]}>
+                    {monthsLeft > 0 ? `${monthsLeft}mo left` : 'Past due'}
+                  </Text>
+                </View>
 
                 {goal.milestoneReward && (
                   <View style={styles.rewardBadge}>
@@ -318,11 +324,10 @@ export default function GoalsScreen() {
               </ScrollView>
             </View>
 
-            <InputField
-              label="Target Date (YYYY-MM-DD)"
+            <DatePickerField
+              label="Target Date"
               value={targetDate}
-              onChangeText={setTargetDate}
-              placeholder="2027-12-31"
+              onChange={setTargetDate}
             />
 
             <InputField
@@ -442,10 +447,25 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: FontSizes.sm,
   },
-  goalDate: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: Spacing.xs,
+  goalDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tileBg,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  goalDateText: {
+    color: Colors.textPrimary,
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+    flex: 1,
+  },
+  goalDateCountdown: {
+    color: Colors.accent,
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
   },
   rewardBadge: {
     flexDirection: 'row',
