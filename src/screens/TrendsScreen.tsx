@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
-import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
+import { Colors, FontSizes, Spacing, BorderRadius, useTheme } from '../theme';
 import { AppData } from '../types';
 import { loadAppData } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate } from '../utils/format';
@@ -11,6 +11,7 @@ import FilterChips from '../components/FilterChips';
 
 export default function TrendsScreen() {
   const { width: screenWidth } = useWindowDimensions();
+  const { colors } = useTheme();
   const [data, setData] = useState<AppData | null>(null);
   const [dateRange, setDateRange] = useState('All Time');
 
@@ -59,7 +60,7 @@ export default function TrendsScreen() {
   const chartWidthClamped = Math.min(Math.min(screenWidth, contentMaxWidth) - 40, 800);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
       <View style={[styles.contentInner, { maxWidth: contentMaxWidth, width: '100%' }]}>
       {/* Hero */}
       <View style={styles.hero}>

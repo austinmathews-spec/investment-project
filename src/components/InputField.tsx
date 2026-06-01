@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet, TextInputProps } from 'react-native';
-import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
+import { Colors, FontSizes, Spacing, BorderRadius, useTheme } from '../theme';
 
 interface InputFieldProps extends TextInputProps {
   label: string;
@@ -8,16 +8,17 @@ interface InputFieldProps extends TextInputProps {
 }
 
 export default function InputField({ label, suffix, style, ...props }: InputFieldProps) {
+  const { colors } = useTheme();
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
       <View style={styles.inputRow}>
         <TextInput
-          style={[styles.input, style]}
-          placeholderTextColor={Colors.textTertiary}
+          style={[styles.input, { backgroundColor: colors.inputBackground, color: colors.textPrimary, borderColor: colors.border }, style]}
+          placeholderTextColor={colors.textTertiary}
           {...props}
         />
-        {suffix && <Text style={styles.suffix}>{suffix}</Text>}
+        {suffix && <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text>}
       </View>
     </View>
   );
@@ -28,7 +29,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   label: {
-    color: Colors.textSecondary,
     fontSize: FontSizes.sm,
     marginBottom: Spacing.xs,
   },
@@ -38,17 +38,13 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: Colors.inputBackground,
-    color: Colors.textPrimary,
     fontSize: FontSizes.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm + 2,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   suffix: {
-    color: Colors.textSecondary,
     fontSize: FontSizes.sm,
     marginLeft: Spacing.sm,
   },

@@ -12,7 +12,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { v4 as uuidv4 } from 'uuid';
 import { Feather } from '@expo/vector-icons';
-import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
+import { Colors, FontSizes, Spacing, BorderRadius, useTheme } from '../theme';
 import { Goal, AppData } from '../types';
 import { loadAppData, saveGoal, deleteGoal } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDateLong, accountTypeLabel, formatAgeYear } from '../utils/format';
@@ -25,6 +25,7 @@ import FilterChips from '../components/FilterChips';
 const GOAL_COLORS = Colors.goalColors;
 
 export default function GoalsScreen() {
+  const { colors } = useTheme();
   const [data, setData] = useState<AppData | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -133,7 +134,7 @@ export default function GoalsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
         <View style={styles.contentInner}>
         {/* Summary */}

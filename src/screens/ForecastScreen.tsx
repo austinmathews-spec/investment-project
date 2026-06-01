@@ -13,7 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { v4 as uuidv4 } from 'uuid';
 import { Feather } from '@expo/vector-icons';
-import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
+import { Colors, FontSizes, Spacing, BorderRadius, useTheme } from '../theme';
 import { RetirementScenario, AppData } from '../types';
 import {
   loadAppData,
@@ -40,9 +40,11 @@ const fmtAge = (v: number) => `${v}`;
 
 export default function ForecastScreen() {
   const { width: screenWidth } = useWindowDimensions();
+  const { colors } = useTheme();
   const [data, setData] = useState<AppData | null>(null);
   const [retModalVisible, setRetModalVisible] = useState(false);
   const [editingRet, setEditingRet] = useState<RetirementScenario | null>(null);
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
   // Retirement form state
   const [retName, setRetName] = useState('');
@@ -97,6 +99,7 @@ export default function ForecastScreen() {
     setRetInflation('3');
     setRetIncome('80000');
     setRetLinkedAccountIds([]);
+    setAccountPickerOpen(false);
     setRetModalVisible(true);
   };
 
@@ -111,6 +114,7 @@ export default function ForecastScreen() {
     setRetInflation((s.inflationRate * 100).toString());
     setRetIncome(s.desiredAnnualIncome.toString());
     setRetLinkedAccountIds([]);
+    setAccountPickerOpen(false);
     setRetModalVisible(true);
   };
 
@@ -149,10 +153,10 @@ export default function ForecastScreen() {
   if (!data) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
         <View style={styles.contentInner}>
-          <Text style={styles.pageTitle}>Retirement Planning</Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Retirement Planning</Text>
 
           {data.retirementScenarios.map((scenario) => {
             const forecast = calculateRetirementForecast(scenario);
@@ -231,20 +235,22 @@ export default function ForecastScreen() {
 
       {/* Retirement Modal */}
       <Modal visible={retModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScroll} bounces={false}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={() => setRetModalVisible(false)} style={styles.modalHeaderBtn}>
-                  <Feather name="x" size={20} color={Colors.textSecondary} />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>
-                  {editingRet ? 'Edit' : 'New'} Retirement Plan
-                </Text>
-                <TouchableOpacity onPress={handleRetSave} style={styles.modalHeaderBtn}>
-                  <Text style={styles.modalHeaderSave}>Save</Text>
-                </TouchableOpacity>
-              </View>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.modalContainer, { backgroundColor: colors.cardBackground }]}>
+            {/* Sticky Header */}
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity onPress={() => setRetModalVisible(false)} style={styles.modalHeaderBtn}>
+                <Feather name="x" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                {editingRet ? 'Edit' : 'New'} Retirement Plan
+              </Text>
+              <TouchableOpacity onPress={handleRetSave} style={styles.modalHeaderBtn}>
+                <Text style={[styles.modalHeaderSave, { color: colors.accent }]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+            {/* Scrollable Content */}
+            <ScrollView style={styles.modalScroll} bounces={false}>
 
               <InputField label="Scenario Name" value={retName} onChangeText={setRetName} placeholder="e.g. Base Plan" />
 
@@ -300,34 +306,26 @@ export default function ForecastScreen() {
                 <SliderInput label={`Retirement Age (${yearFromAge(parseInt(retRetireAge) || 60)})`} value={parseInt(retRetireAge) || 60} min={40} max={85} step={1} formatValue={fmtAge} onValueChange={v => setRetRetireAge(v.toString())} />
               </View>
 
-              {/* Account Picker */}
+              {/* Account Picker — collapsible */}
               <View style={styles.sliderSection}>
-                <Text style={styles.sliderSectionTitle}>INCLUDE ACCOUNTS</Text>
-                <Text style={styles.accountPickerHint}>
-                  {retLinkedAccountIds.length === 0
-                    ? 'All accounts selected by default'
-                    : `${retLinkedAccountIds.length} account${retLinkedAccountIds.length > 1 ? 's' : ''} · ${formatCurrency(linkedSavingsTotal)}`}
-                </Text>
-                {(() => {
-                  const relevantAccts = retLinkedAccountIds.length > 0
-                    ? data.accounts.filter(a => retLinkedAccountIds.includes(a.id))
-                    : data.accounts;
-                  const withRate = relevantAccts.filter(a => a.interestRate !== undefined && a.interestRate > 0);
-                  if (withRate.length === 0) return null;
-                  const totalBal = withRate.reduce((s, a) => s + a.balance, 0);
-                  const weightedRate = totalBal > 0
-                    ? withRate.reduce((s, a) => s + (a.interestRate! * a.balance), 0) / totalBal
-                    : 0;
-                  return (
-                    <Text style={[styles.accountPickerHint, { color: Colors.accent, marginTop: Spacing.xs }]}>
-                      Weighted avg rate: {(weightedRate * 100).toFixed(1)}% (from {withRate.length} account{withRate.length > 1 ? 's' : ''})
+                <TouchableOpacity
+                  style={styles.accountPickerToggle}
+                  onPress={() => setAccountPickerOpen(!accountPickerOpen)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sliderSectionTitle, { marginBottom: 2 }]}>INCLUDE ACCOUNTS</Text>
+                    <Text style={styles.accountPickerHint}>
+                      {retLinkedAccountIds.length === 0
+                        ? `All ${data.accounts.length} accounts · ${formatCurrency(data.accounts.reduce((s, a) => s + a.balance, 0))}`
+                        : `${retLinkedAccountIds.length} of ${data.accounts.length} · ${formatCurrency(linkedSavingsTotal)}`}
                     </Text>
-                  );
-                })()}
-                <ScrollView style={styles.accountPickerList} nestedScrollEnabled>
-                  {data.accounts
-
-                    .map(account => {
+                  </View>
+                  <Feather name={accountPickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+                {accountPickerOpen && (
+                  <View style={styles.accountPickerList}>
+                    {data.accounts.map(account => {
                       const isLinked = retLinkedAccountIds.includes(account.id);
                       return (
                         <TouchableOpacity
@@ -336,29 +334,16 @@ export default function ForecastScreen() {
                           onPress={() => toggleRetAccount(account.id)}
                           activeOpacity={0.7}
                         >
-                          <View style={styles.accountPickerLeft}>
-                            <View style={[styles.accountPickerCheck, isLinked && styles.accountPickerCheckActive]}>
-                              {isLinked && <Feather name="check" size={12} color="#FFF" />}
-                            </View>
-                            <View>
-                              <Text style={styles.accountPickerName}>{account.name}</Text>
-                              <Text style={styles.accountPickerMeta}>
-                                {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
-                              </Text>
-                            </View>
+                          <View style={[styles.accountPickerCheck, isLinked && styles.accountPickerCheckActive]}>
+                            {isLinked && <Feather name="check" size={10} color="#FFF" />}
                           </View>
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
-                            {account.interestRate !== undefined && account.interestRate > 0 && (
-                              <Text style={{ fontSize: 10, color: Colors.accent, fontWeight: '600' }}>
-                                {(account.interestRate * 100).toFixed(1)}% APY
-                              </Text>
-                            )}
-                          </View>
+                          <Text style={styles.accountPickerName} numberOfLines={1}>{account.name}</Text>
+                          <Text style={styles.accountPickerBalance}>{formatCurrencyDecimal(account.balance)}</Text>
                         </TouchableOpacity>
                       );
                     })}
-                </ScrollView>
+                  </View>
+                )}
               </View>
 
               <View style={styles.sliderSection}>
@@ -371,8 +356,8 @@ export default function ForecastScreen() {
                 <SliderInput label="Annual Return" value={isNaN(parseFloat(retReturn)) ? 7 : parseFloat(retReturn)} min={0} max={15} step={0.5} formatValue={fmtPct} onValueChange={v => setRetReturn(v.toString())} />
                 <SliderInput label="Inflation Rate" value={isNaN(parseFloat(retInflation)) ? 3 : parseFloat(retInflation)} min={0} max={10} step={0.5} formatValue={fmtPct} onValueChange={v => setRetInflation(v.toString())} />
               </View>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </View>
         </View>
       </Modal>
     </View>
@@ -460,16 +445,16 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
   },
-  modalScroll: {
+  modalContainer: {
     maxHeight: '92%',
-  },
-  modalContent: {
-    backgroundColor: Colors.cardBackground,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
+    overflow: 'hidden',
+  },
+  modalScroll: {
+    flex: 1,
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
@@ -477,10 +462,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   modalHeaderBtn: {
     width: 44,
@@ -489,12 +473,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalTitle: {
-    color: Colors.textPrimary,
     fontSize: FontSizes.lg,
     fontWeight: '700',
   },
   modalHeaderSave: {
-    color: Colors.accent,
     fontSize: FontSizes.md,
     fontWeight: '700',
   },
@@ -542,38 +524,36 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: Spacing.md,
   },
+  accountPickerToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
   accountPickerHint: {
     color: Colors.textTertiary,
     fontSize: FontSizes.sm,
-    marginBottom: Spacing.sm,
   },
   accountPickerList: {
-    maxHeight: 220,
     backgroundColor: Colors.tileBg,
     borderRadius: BorderRadius.md,
     padding: Spacing.xs,
+    marginTop: Spacing.sm,
   },
   accountPickerItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    paddingVertical: 6,
     paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.sm,
+    gap: Spacing.sm,
   },
   accountPickerItemActive: {
     backgroundColor: Colors.accentDim,
   },
-  accountPickerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    flex: 1,
-  },
   accountPickerCheck: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     borderColor: Colors.border,
     alignItems: 'center',
@@ -587,11 +567,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: FontSizes.sm,
     fontWeight: '500',
-  },
-  accountPickerMeta: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    marginTop: 1,
+    flex: 1,
   },
   accountPickerBalance: {
     color: Colors.textPrimary,

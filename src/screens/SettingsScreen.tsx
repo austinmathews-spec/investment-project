@@ -9,9 +9,10 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors, Spacing, FontSizes, BorderRadius } from '../theme';
+import { Colors, Spacing, FontSizes, BorderRadius, useTheme } from '../theme';
 import Card from '../components/Card';
 import {
   loadAirtableConfig,
@@ -25,6 +26,7 @@ import { AirtableConfig } from '../types';
 import { Feather } from '@expo/vector-icons';
 
 export default function SettingsScreen() {
+  const { colors, mode, toggle } = useTheme();
   const [pat, setPat] = useState('');
   const [baseId, setBaseId] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -122,23 +124,43 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={[styles.content, { alignItems: 'center' }]}
     >
       <View style={styles.contentInner}>
       {isDemoMode() && (
-        <View style={styles.demoBanner}>
-          <Feather name="play-circle" size={20} color={Colors.accent} />
+        <View style={[styles.demoBanner, { backgroundColor: colors.accentDim }]}>
+          <Feather name="play-circle" size={20} color={colors.accent} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.demoBannerTitle}>Demo Mode</Text>
-            <Text style={styles.demoBannerText}>
+            <Text style={[styles.demoBannerTitle, { color: colors.accent }]}>Demo Mode</Text>
+            <Text style={[styles.demoBannerText, { color: colors.textSecondary }]}>
               You're viewing sample data. Log out and use your password for live Airtable data.
             </Text>
           </View>
         </View>
       )}
-      <Text style={styles.title}>Airtable Connection</Text>
-      <Text style={styles.subtitle}>
+
+      {/* Dark Mode Toggle */}
+      <View style={[styles.themeCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+        <View style={styles.themeRow}>
+          <View style={styles.themeLeft}>
+            <Feather name={mode === 'dark' ? 'moon' : 'sun'} size={20} color={colors.accent} />
+            <View>
+              <Text style={[styles.themeTitle, { color: colors.textPrimary }]}>Dark Mode</Text>
+              <Text style={[styles.themeSubtitle, { color: colors.textTertiary }]}>{mode === 'dark' ? 'On' : 'Off'}</Text>
+            </View>
+          </View>
+          <Switch
+            value={mode === 'dark'}
+            onValueChange={toggle}
+            trackColor={{ false: colors.border, true: colors.accent }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+      </View>
+
+      <Text style={[styles.title, { color: colors.textPrimary }]}>Airtable Connection</Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         Connect to your Airtable base to sync accounts, snapshots, and expenses.
       </Text>
 
@@ -147,46 +169,46 @@ export default function SettingsScreen() {
           <View
             style={[
               styles.statusDot,
-              { backgroundColor: isConnected ? Colors.positive : Colors.textTertiary },
+              { backgroundColor: isConnected ? colors.positive : colors.textTertiary },
             ]}
           />
-          <Text style={styles.statusText}>
+          <Text style={[styles.statusText, { color: colors.textPrimary }]}>
             {isConnected ? 'Connected' : 'Not Connected'}
           </Text>
         </View>
         {lastSync && (
-          <Text style={styles.lastSync}>Last synced: {lastSync}</Text>
+          <Text style={[styles.lastSync, { color: colors.textSecondary }]}>Last synced: {lastSync}</Text>
         )}
         {syncError && (
-          <Text style={styles.errorText}>{syncError}</Text>
+          <Text style={[styles.errorText, { color: colors.negative }]}>{syncError}</Text>
         )}
       </Card>
 
       <Card>
-        <Text style={styles.label}>Personal Access Token</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Personal Access Token</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.textPrimary }]}
           value={pat}
           onChangeText={setPat}
           placeholder="pat..."
-          placeholderTextColor={Colors.textTertiary}
+          placeholderTextColor={colors.textTertiary}
           secureTextEntry
           autoCapitalize="none"
           autoCorrect={false}
         />
 
-        <Text style={[styles.label, { marginTop: Spacing.md }]}>Base ID</Text>
+        <Text style={[styles.label, { marginTop: Spacing.md, color: colors.textSecondary }]}>Base ID</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.textPrimary }]}
           value={baseId}
           onChangeText={setBaseId}
           placeholder="appXXXXXXXXXXX"
-          placeholderTextColor={Colors.textTertiary}
+          placeholderTextColor={colors.textTertiary}
           autoCapitalize="none"
           autoCorrect={false}
         />
 
-        <Text style={styles.hint}>
+        <Text style={[styles.hint, { color: colors.textTertiary }]}>
           Create a PAT at airtable.com/create/tokens with data.records:read,
           data.records:write, and schema.bases:read scopes.
         </Text>
@@ -194,43 +216,42 @@ export default function SettingsScreen() {
 
       {isSyncing ? (
         <View style={styles.syncingRow}>
-          <ActivityIndicator color={Colors.accent} />
-          <Text style={styles.syncingText}>Syncing with Airtable...</Text>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={[styles.syncingText, { color: colors.accent }]}>Syncing with Airtable...</Text>
         </View>
       ) : isConnected ? (
         <View style={styles.buttonGroup}>
-          <TouchableOpacity style={styles.syncButton} onPress={handleSync}>
+          <TouchableOpacity style={[styles.syncButton, { backgroundColor: colors.accent }]} onPress={handleSync}>
             <Text style={styles.syncButtonText}>Sync Now</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.disconnectButton}
+            style={[styles.disconnectButton, { borderColor: colors.negative }]}
             onPress={handleDisconnect}
           >
-            <Text style={styles.disconnectButtonText}>Disconnect</Text>
+            <Text style={[styles.disconnectButtonText, { color: colors.negative }]}>Disconnect</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <TouchableOpacity style={styles.connectButton} onPress={handleConnect}>
+        <TouchableOpacity style={[styles.connectButton, { backgroundColor: colors.accent }]} onPress={handleConnect}>
           <Text style={styles.connectButtonText}>Connect & Sync</Text>
         </TouchableOpacity>
       )}
 
       <Card>
-        <Text style={styles.infoTitle}>What syncs from Airtable</Text>
-        <Text style={styles.infoItem}>
+        <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>What syncs from Airtable</Text>
+        <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
           • Saving & Investment → Your account balances
         </Text>
-
-        <Text style={styles.infoItem}>
+        <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
           • Debt → Liabilities (student loans, etc.)
         </Text>
-        <Text style={styles.infoItem}>
+        <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
           • Calculation Hub → Net worth history & trends
         </Text>
-        <Text style={styles.infoItem}>
+        <Text style={[styles.infoItem, { color: colors.textSecondary }]}>
           • Recurring Expenses → Monthly expense tracking
         </Text>
-        <Text style={[styles.infoItem, { marginTop: Spacing.sm }]}>
+        <Text style={[styles.infoItem, { marginTop: Spacing.sm, color: colors.textSecondary }]}>
           Goals, retirement scenarios, and forecasts are stored locally.
         </Text>
       </Card>
@@ -242,7 +263,6 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     padding: Spacing.lg,
@@ -253,15 +273,37 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  themeCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  themeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  themeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  themeTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  themeSubtitle: {
+    fontSize: FontSizes.xs,
+    marginTop: 1,
+  },
   title: {
     fontSize: FontSizes.xl,
     fontWeight: '700',
-    color: Colors.textPrimary,
     marginBottom: Spacing.xs,
   },
   subtitle: {
     fontSize: FontSizes.md,
-    color: Colors.textSecondary,
     marginBottom: Spacing.lg,
   },
   statusRow: {
@@ -278,42 +320,33 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: FontSizes.md,
     fontWeight: '600',
-    color: Colors.textPrimary,
   },
   lastSync: {
     fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
   },
   errorText: {
     fontSize: FontSizes.sm,
-    color: Colors.negative,
     marginTop: Spacing.xs,
   },
   label: {
     fontSize: FontSizes.sm,
     fontWeight: '600',
-    color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: Spacing.xs,
   },
   input: {
-    backgroundColor: Colors.inputBackground,
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: FontSizes.md,
-    color: Colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   hint: {
     fontSize: FontSizes.xs,
-    color: Colors.textTertiary,
     marginTop: Spacing.sm,
   },
   connectButton: {
-    backgroundColor: Colors.accent,
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md,
     alignItems: 'center',
@@ -329,7 +362,6 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.md,
   },
   syncButton: {
-    backgroundColor: Colors.accent,
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md,
     alignItems: 'center',
@@ -345,12 +377,10 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.negative,
   },
   disconnectButtonText: {
     fontSize: FontSizes.md,
     fontWeight: '600',
-    color: Colors.negative,
   },
   syncingRow: {
     flexDirection: 'row',
@@ -361,23 +391,19 @@ const styles = StyleSheet.create({
   },
   syncingText: {
     fontSize: FontSizes.md,
-    color: Colors.accent,
   },
   infoTitle: {
     fontSize: FontSizes.md,
     fontWeight: '700',
-    color: Colors.textPrimary,
     marginBottom: Spacing.sm,
   },
   infoItem: {
     fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
     lineHeight: 20,
   },
   demoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.accentDim,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     gap: Spacing.sm,
@@ -386,11 +412,9 @@ const styles = StyleSheet.create({
   demoBannerTitle: {
     fontSize: FontSizes.md,
     fontWeight: '700',
-    color: Colors.accent,
   },
   demoBannerText: {
     fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
     marginTop: 2,
   },
 });

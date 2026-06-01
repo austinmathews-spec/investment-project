@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
-import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
+import { Colors, FontSizes, Spacing, BorderRadius, useTheme } from '../theme';
 import { AppData, Goal } from '../types';
 import { loadAppData, syncWithAirtable, loadAirtableConfig, reorderGoals, isDemoMode } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, formatDateLong, accountTypeLabel, formatAgeYear } from '../utils/format';
@@ -22,6 +22,7 @@ import BarChart from '../components/BarChart';
 
 export default function DashboardScreen() {
   const { width: screenWidth } = useWindowDimensions();
+  const { colors } = useTheme();
   const isDesktop = screenWidth >= 768;
   const [data, setData] = useState<AppData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -122,9 +123,9 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={[styles.content, { alignItems: 'center' }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
     >
       <View style={[styles.contentInner, { maxWidth: contentMaxWidth, width: '100%' }]}>
       {isDemoMode() && (

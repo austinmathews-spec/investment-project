@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
-import { Colors, FontSizes, Spacing } from '../theme';
+import { FontSizes, Spacing, useTheme } from '../theme';
 import DashboardScreen from '../screens/DashboardScreen';
 import AccountsScreen from '../screens/AccountsScreen';
 import AccountDetailScreen from '../screens/AccountDetailScreen';
@@ -38,22 +38,15 @@ function getTabIcon(route: string): FeatherIconName {
   }
 }
 
-const stackScreenOptions = {
-  headerStyle: {
-    backgroundColor: Colors.background,
-  },
-  headerTintColor: Colors.textPrimary,
-  headerTitleStyle: {
-    fontWeight: '700' as const,
-    fontSize: FontSizes.lg,
-  },
-  headerShadowVisible: false,
-  headerBackTitleVisible: false,
-};
-
 function DashboardStackScreen() {
+  const { colors } = useTheme();
   return (
-    <DashboardStack.Navigator screenOptions={stackScreenOptions}>
+    <DashboardStack.Navigator screenOptions={{
+      headerStyle: { backgroundColor: colors.background },
+      headerTintColor: colors.textPrimary,
+      headerTitleStyle: { fontWeight: '700' as const, fontSize: FontSizes.lg },
+      headerShadowVisible: false,
+    }}>
       <DashboardStack.Screen name="Dashboard" component={DashboardScreen} />
       <DashboardStack.Screen
         name="AccountDetail"
@@ -67,8 +60,14 @@ function DashboardStackScreen() {
 }
 
 function AccountsStackScreen() {
+  const { colors } = useTheme();
   return (
-    <AccountsStack.Navigator screenOptions={stackScreenOptions}>
+    <AccountsStack.Navigator screenOptions={{
+      headerStyle: { backgroundColor: colors.background },
+      headerTintColor: colors.textPrimary,
+      headerTitleStyle: { fontWeight: '700' as const, fontSize: FontSizes.lg },
+      headerShadowVisible: false,
+    }}>
       <AccountsStack.Screen name="Accounts" component={AccountsScreen} />
       <AccountsStack.Screen
         name="AccountDetail"
@@ -83,6 +82,7 @@ function AccountsStackScreen() {
 
 export default function AppNavigator() {
   const { width: screenWidth } = useWindowDimensions();
+  const { colors } = useTheme();
   const isDesktop = screenWidth >= 768;
 
   return (
@@ -93,11 +93,11 @@ export default function AppNavigator() {
             const iconName = getTabIcon(route.name);
             return <Feather name={iconName} size={size} color={color} />;
           },
-          tabBarActiveTintColor: Colors.accent,
-          tabBarInactiveTintColor: Colors.textTertiary,
+          tabBarActiveTintColor: colors.accent,
+          tabBarInactiveTintColor: colors.textTertiary,
           tabBarStyle: {
-            backgroundColor: Colors.tabBarBackground,
-            borderTopColor: Colors.border,
+            backgroundColor: colors.tabBarBackground,
+            borderTopColor: colors.border,
             borderTopWidth: 0.5,
             height: isDesktop ? 56 : 80,
             paddingBottom: isDesktop ? Spacing.sm : Spacing.md,
@@ -122,29 +122,29 @@ export default function AppNavigator() {
         />
         <Tab.Screen name="Trends" component={TrendsScreen} options={{
           headerShown: true,
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.textPrimary,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.textPrimary,
           headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
           headerShadowVisible: false,
         }} />
         <Tab.Screen name="Forecast" component={ForecastScreen} options={{
           headerShown: true,
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.textPrimary,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.textPrimary,
           headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
           headerShadowVisible: false,
         }} />
         <Tab.Screen name="Goals" component={GoalsScreen} options={{
           headerShown: true,
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.textPrimary,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.textPrimary,
           headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
           headerShadowVisible: false,
         }} />
         <Tab.Screen name="Settings" component={SettingsScreen} options={{
           headerShown: true,
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.textPrimary,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.textPrimary,
           headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
           headerShadowVisible: false,
         }} />

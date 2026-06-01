@@ -12,7 +12,7 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { v4 as uuidv4 } from 'uuid';
 import { Feather } from '@expo/vector-icons';
-import { Colors, FontSizes, Spacing, BorderRadius } from '../theme';
+import { Colors, FontSizes, Spacing, BorderRadius, useTheme } from '../theme';
 import { Account, AccountType, AppData } from '../types';
 import { loadAppData, saveAccount, deleteAccount } from '../storage';
 import { formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
@@ -34,6 +34,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 ];
 
 export default function AccountsScreen() {
+  const { colors } = useTheme();
   const [data, setData] = useState<AppData | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -99,7 +100,7 @@ export default function AccountsScreen() {
   const isFiltered = sourceFilter !== 'All' || typeFilters.length > 0;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={[styles.content, { alignItems: 'center' }]}>
         <View style={styles.contentInner}>
         {/* Total */}
