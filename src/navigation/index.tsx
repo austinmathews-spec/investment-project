@@ -12,6 +12,7 @@ import TrendsScreen from '../screens/TrendsScreen';
 import ForecastScreen from '../screens/ForecastScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import GuidanceScreen from '../screens/GuidanceScreen';
 
 const Tab = createBottomTabNavigator();
 const DashboardStack = createNativeStackNavigator();
@@ -31,6 +32,8 @@ function getTabIcon(route: string): FeatherIconName {
       return 'bar-chart-2';
     case 'Goals':
       return 'target';
+    case 'Guidance':
+      return 'message-circle';
     case 'Settings':
       return 'settings';
     default:
@@ -140,6 +143,9 @@ export default function AppNavigator() {
           headerTintColor: Colors.textPrimary,
           headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
           headerShadowVisible: false,
+        }} />
+        <Tab.Screen name="Guidance" component={GuidanceScreen} options={{
+          headerShown: false,
         }} />
         <Tab.Screen name="Settings" component={SettingsScreen} options={{
           headerShown: true,
