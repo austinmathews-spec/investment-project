@@ -1,4 +1,4 @@
-import { listRecords, createRecord, updateRecord } from './client';
+import { listRecords, createRecord, updateRecord, deleteRecord } from './client';
 import {
   Account,
   AccountType,
@@ -7,6 +7,7 @@ import {
   RecurringExpense,
   ExpenseFrequency,
   ExpenseCategory,
+  Goal,
 } from '../types';
 
 // ─── Column → Account mapping ────────────────────────────────────
@@ -285,6 +286,70 @@ export function parseExpenses(records: AirtableRecord[]): RecurringExpense[] {
   }));
 }
 
+// ─── Goals ───────────────────────────────────────────────────────
+
+export async function fetchGoals(
+  pat: string,
+  baseId: string
+): Promise<AirtableRecord[]> {
+  return listRecords<AirtableFields>(pat, baseId, 'Goals');
+}
+
+export function parseGoals(records: AirtableRecord[]): Goal[] {
+  return records.map((rec, idx) => ({
+    id: rec.id, // use Airtable record ID directly
+    name: (rec.fields.Name as string) ?? '',
+    targetAmount: (rec.fields['Target Amount'] as number) ?? 0,
+    currentAmount: (rec.fields['Current Amount'] as number) ?? 0,
+    targetDate: (rec.fields['Target Date'] as string) ?? '2027-12-31',
+    color: (rec.fields.Color as string) ?? '#4CAF50',
+    linkedAccountIds: (rec.fields['Linked Account IDs'] as string)
+      ? (rec.fields['Linked Account IDs'] as string).split(',')
+      : undefined,
+    priority: (rec.fields.Priority as number) ?? idx,
+    milestoneReward: (rec.fields['Milestone Reward'] as string) || undefined,
+  }));
+}
+
+function goalToAirtableFields(goal: Goal): Record<string, unknown> {
+  return {
+    Name: goal.name,
+    'Target Amount': goal.targetAmount,
+    'Current Amount': goal.currentAmount,
+    'Target Date': goal.targetDate,
+    Color: goal.color,
+    'Linked Account IDs': goal.linkedAccountIds?.join(',') ?? '',
+    Priority: goal.priority ?? 0,
+    'Milestone Reward': goal.milestoneReward ?? '',
+  };
+}
+
+export async function createGoalInAirtable(
+  pat: string,
+  baseId: string,
+  goal: Goal
+): Promise<string> {
+  const rec = await createRecord(pat, baseId, 'Goals', goalToAirtableFields(goal));
+  return rec.id;
+}
+
+export async function updateGoalInAirtable(
+  pat: string,
+  baseId: string,
+  recordId: string,
+  goal: Goal
+): Promise<void> {
+  await updateRecord(pat, baseId, 'Goals', recordId, goalToAirtableFields(goal));
+}
+
+export async function deleteGoalInAirtable(
+  pat: string,
+  baseId: string,
+  recordId: string
+): Promise<void> {
+  await deleteRecord(pat, baseId, 'Goals', recordId);
+}
+
 // ─── Write helpers ───────────────────────────────────────────────
 
 export async function createSavingsSnapshot(
@@ -333,6 +398,7 @@ export interface AirtableSyncResult {
   accounts: Account[];
   snapshots: NetWorthSnapshot[];
   expenses: RecurringExpense[];
+  goals: Goal[];
   spyPrice?: number;
   btcPrice?: number;
 }
@@ -341,17 +407,19 @@ export async function syncFromAirtable(
   pat: string,
   baseId: string
 ): Promise<AirtableSyncResult> {
-  const [savingsRecs, debtRecs, calcHubRecs, expenseRecs] =
+  const [savingsRecs, debtRecs, calcHubRecs, expenseRecs, goalRecs] =
     await Promise.all([
       fetchSavingsInvestment(pat, baseId),
       fetchDebt(pat, baseId),
       fetchCalculationHub(pat, baseId),
       fetchRecurringExpenses(pat, baseId),
+      fetchGoals(pat, baseId).catch(() => [] as AirtableRecord[]),
     ]);
 
   const accounts = parseAccounts(savingsRecs, debtRecs);
   const snapshots = parseSnapshots(calcHubRecs, savingsRecs, debtRecs);
   const expenses = parseExpenses(expenseRecs);
+  const goals = parseGoals(goalRecs);
 
   // Extract reference prices from latest savings record
   const sortedSavings = [...savingsRecs].sort(
@@ -367,5 +435,5 @@ export async function syncFromAirtable(
     ? (latest.fields['$BTC Price for Reference'] as number)
     : undefined;
 
-  return { accounts, snapshots, expenses, spyPrice, btcPrice };
+  return { accounts, snapshots, expenses, goals, spyPrice, btcPrice };
 }

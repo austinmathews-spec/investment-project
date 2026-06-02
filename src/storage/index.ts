@@ -9,7 +9,7 @@ import {
   AirtableConfig,
   AppData,
 } from '../types';
-import { syncFromAirtable } from '../airtable/sync';
+import { syncFromAirtable, createGoalInAirtable, updateGoalInAirtable, deleteGoalInAirtable } from '../airtable/sync';
 import { getDemoData } from '../data/demoData';
 
 const STORAGE_KEY = '@sofi_dashboard_data';
@@ -102,15 +102,15 @@ export async function syncWithAirtable(): Promise<AppData> {
 
   const result = await syncFromAirtable(config.pat, config.baseId);
 
-  // Load existing local data to preserve goals, forecasts, retirement scenarios
+  // Load existing local data to preserve forecasts, retirement scenarios
   const localData = await loadAppData();
 
   const merged: AppData = {
     accounts: result.accounts,
     snapshots: result.snapshots,
     expenses: result.expenses,
+    goals: result.goals, // now from Airtable
     // These are local-only (not in Airtable)
-    goals: localData.goals,
     retirementScenarios: localData.retirementScenarios,
     forecastScenarios: localData.forecastScenarios,
   };
@@ -159,18 +159,46 @@ export async function saveSnapshot(snapshot: NetWorthSnapshot): Promise<AppData>
 
 export async function saveGoal(goal: Goal): Promise<AppData> {
   const data = await loadAppData();
-  const idx = data.goals.findIndex((g) => g.id === goal.id);
-  if (idx >= 0) {
-    data.goals[idx] = goal;
+  const config = _demoMode ? null : await loadAirtableConfig();
+
+  if (config && config.pat && config.baseId) {
+    // Airtable-backed persistence
+    const existing = data.goals.find((g) => g.id === goal.id);
+    if (existing) {
+      await updateGoalInAirtable(config.pat, config.baseId, goal.id, goal);
+      const idx = data.goals.findIndex((g) => g.id === goal.id);
+      data.goals[idx] = goal;
+    } else {
+      const airtableId = await createGoalInAirtable(config.pat, config.baseId, goal);
+      goal.id = airtableId; // replace local UUID with Airtable record ID
+      data.goals.push(goal);
+    }
   } else {
-    data.goals.push(goal);
+    // Local-only fallback (demo mode or no config)
+    const idx = data.goals.findIndex((g) => g.id === goal.id);
+    if (idx >= 0) {
+      data.goals[idx] = goal;
+    } else {
+      data.goals.push(goal);
+    }
   }
+
   await saveAppData(data);
   return data;
 }
 
 export async function deleteGoal(goalId: string): Promise<AppData> {
   const data = await loadAppData();
+  const config = _demoMode ? null : await loadAirtableConfig();
+
+  if (config && config.pat && config.baseId) {
+    try {
+      await deleteGoalInAirtable(config.pat, config.baseId, goalId);
+    } catch {
+      // record may not exist in Airtable (legacy local goal)
+    }
+  }
+
   data.goals = data.goals.filter((g) => g.id !== goalId);
   await saveAppData(data);
   return data;
