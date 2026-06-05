@@ -9,7 +9,7 @@ import {
   AirtableConfig,
   AppData,
 } from '../types';
-import { syncFromAirtable } from '../airtable/sync';
+import { syncFromAirtable, pushGoalToAirtable, deleteGoalFromAirtable, ensureGoalsTable } from '../airtable/sync';
 import { getDemoData } from '../data/demoData';
 
 const STORAGE_KEY = '@sofi_dashboard_data';
@@ -102,15 +102,19 @@ export async function syncWithAirtable(): Promise<AppData> {
 
   const result = await syncFromAirtable(config.pat, config.baseId);
 
-  // Load existing local data to preserve goals, forecasts, retirement scenarios
+  // Load existing local data to preserve forecasts and retirement scenarios
   const localData = await loadAppData();
+
+  // Merge goals: Airtable is source of truth, but keep any local-only goals not yet pushed
+  const airtableGoalIds = new Set(result.goals.map(g => g.id));
+  const localOnlyGoals = localData.goals.filter(g => !airtableGoalIds.has(g.id));
 
   const merged: AppData = {
     accounts: result.accounts,
     snapshots: result.snapshots,
     expenses: result.expenses,
+    goals: [...result.goals, ...localOnlyGoals],
     // These are local-only (not in Airtable)
-    goals: localData.goals,
     retirementScenarios: localData.retirementScenarios,
     forecastScenarios: localData.forecastScenarios,
   };
@@ -166,6 +170,28 @@ export async function saveGoal(goal: Goal): Promise<AppData> {
     data.goals.push(goal);
   }
   await saveAppData(data);
+
+  // Push to Airtable in the background
+  const config = await loadAirtableConfig();
+  if (config?.pat && config?.baseId && !_demoMode) {
+    try {
+      await ensureGoalsTable(config.pat, config.baseId);
+      const existingId = idx >= 0 ? goal.id : undefined;
+      const airtableId = await pushGoalToAirtable(config.pat, config.baseId, goal, existingId);
+      // If this was a new goal (no Airtable ID yet), update the local ID to match Airtable
+      if (idx < 0 && airtableId !== goal.id) {
+        const refreshed = await loadAppData();
+        const gIdx = refreshed.goals.findIndex(g => g.id === goal.id);
+        if (gIdx >= 0) {
+          refreshed.goals[gIdx].id = airtableId;
+          await saveAppData(refreshed);
+          return refreshed;
+        }
+      }
+    } catch {
+      // Airtable push failed silently; data is still saved locally
+    }
+  }
   return data;
 }
 
@@ -173,6 +199,16 @@ export async function deleteGoal(goalId: string): Promise<AppData> {
   const data = await loadAppData();
   data.goals = data.goals.filter((g) => g.id !== goalId);
   await saveAppData(data);
+
+  // Delete from Airtable in the background
+  const config = await loadAirtableConfig();
+  if (config?.pat && config?.baseId && !_demoMode) {
+    try {
+      await deleteGoalFromAirtable(config.pat, config.baseId, goalId);
+    } catch {
+      // Airtable delete failed silently; goal is already removed locally
+    }
+  }
   return data;
 }
 
