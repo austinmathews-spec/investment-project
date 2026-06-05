@@ -1,4 +1,4 @@
-import { listRecords, createRecord, updateRecord } from './client';
+import { listRecords, createRecord, updateRecord, deleteRecord, createTable } from './client';
 import {
   Account,
   AccountType,
@@ -7,6 +7,7 @@ import {
   RecurringExpense,
   ExpenseFrequency,
   ExpenseCategory,
+  Goal,
 } from '../types';
 
 // ─── Column → Account mapping ────────────────────────────────────
@@ -113,6 +114,18 @@ export async function fetchRecurringExpenses(
   baseId: string
 ): Promise<AirtableRecord[]> {
   return listRecords<AirtableFields>(pat, baseId, 'Recurring Expenses');
+}
+
+export async function fetchGoals(
+  pat: string,
+  baseId: string
+): Promise<AirtableRecord[]> {
+  try {
+    return await listRecords<AirtableFields>(pat, baseId, 'Goals');
+  } catch {
+    // Table may not exist yet; return empty
+    return [];
+  }
 }
 
 // ─── Parse Airtable data into app types ──────────────────────────
@@ -285,6 +298,22 @@ export function parseExpenses(records: AirtableRecord[]): RecurringExpense[] {
   }));
 }
 
+export function parseGoals(records: AirtableRecord[]): Goal[] {
+  return records.map((rec) => ({
+    id: rec.id,
+    name: (rec.fields.Name as string) ?? '',
+    targetAmount: (rec.fields.TargetAmount as number) ?? 0,
+    currentAmount: (rec.fields.CurrentAmount as number) ?? 0,
+    targetDate: (rec.fields.TargetDate as string) ?? '',
+    color: (rec.fields.Color as string) ?? '#4A90D9',
+    linkedAccountIds: rec.fields.LinkedAccountIds
+      ? JSON.parse(rec.fields.LinkedAccountIds as string)
+      : undefined,
+    priority: (rec.fields.Priority as number) ?? undefined,
+    milestoneReward: (rec.fields.MilestoneReward as string) || undefined,
+  }));
+}
+
 // ─── Write helpers ───────────────────────────────────────────────
 
 export async function createSavingsSnapshot(
@@ -327,12 +356,73 @@ export async function createExpense(
   });
 }
 
+// ─── Goal CRUD ──────────────────────────────────────────────────
+
+function goalToAirtableFields(goal: Goal): Record<string, unknown> {
+  const fields: Record<string, unknown> = {
+    Name: goal.name,
+    TargetAmount: goal.targetAmount,
+    CurrentAmount: goal.currentAmount,
+    TargetDate: goal.targetDate,
+    Color: goal.color,
+  };
+  if (goal.linkedAccountIds && goal.linkedAccountIds.length > 0) {
+    fields.LinkedAccountIds = JSON.stringify(goal.linkedAccountIds);
+  }
+  if (goal.priority != null) {
+    fields.Priority = goal.priority;
+  }
+  if (goal.milestoneReward) {
+    fields.MilestoneReward = goal.milestoneReward;
+  }
+  return fields;
+}
+
+export async function pushGoalToAirtable(
+  pat: string,
+  baseId: string,
+  goal: Goal,
+  existingAirtableId?: string
+): Promise<string> {
+  if (existingAirtableId) {
+    await updateRecord(pat, baseId, 'Goals', existingAirtableId, goalToAirtableFields(goal));
+    return existingAirtableId;
+  }
+  const created = await createRecord(pat, baseId, 'Goals', goalToAirtableFields(goal));
+  return created.id;
+}
+
+export async function deleteGoalFromAirtable(
+  pat: string,
+  baseId: string,
+  airtableId: string
+): Promise<void> {
+  await deleteRecord(pat, baseId, 'Goals', airtableId);
+}
+
+export async function ensureGoalsTable(
+  pat: string,
+  baseId: string
+): Promise<void> {
+  await createTable(pat, baseId, 'Goals', [
+    { name: 'Name', type: 'singleLineText' },
+    { name: 'TargetAmount', type: 'number', options: { precision: 2 } },
+    { name: 'CurrentAmount', type: 'number', options: { precision: 2 } },
+    { name: 'TargetDate', type: 'singleLineText' },
+    { name: 'Color', type: 'singleLineText' },
+    { name: 'LinkedAccountIds', type: 'singleLineText' },
+    { name: 'Priority', type: 'number', options: { precision: 0 } },
+    { name: 'MilestoneReward', type: 'singleLineText' },
+  ]);
+}
+
 // ─── Full sync ──────────────────────────────────────────────────
 
 export interface AirtableSyncResult {
   accounts: Account[];
   snapshots: NetWorthSnapshot[];
   expenses: RecurringExpense[];
+  goals: Goal[];
   spyPrice?: number;
   btcPrice?: number;
 }
@@ -341,17 +431,19 @@ export async function syncFromAirtable(
   pat: string,
   baseId: string
 ): Promise<AirtableSyncResult> {
-  const [savingsRecs, debtRecs, calcHubRecs, expenseRecs] =
+  const [savingsRecs, debtRecs, calcHubRecs, expenseRecs, goalRecs] =
     await Promise.all([
       fetchSavingsInvestment(pat, baseId),
       fetchDebt(pat, baseId),
       fetchCalculationHub(pat, baseId),
       fetchRecurringExpenses(pat, baseId),
+      fetchGoals(pat, baseId),
     ]);
 
   const accounts = parseAccounts(savingsRecs, debtRecs);
   const snapshots = parseSnapshots(calcHubRecs, savingsRecs, debtRecs);
   const expenses = parseExpenses(expenseRecs);
+  const goals = parseGoals(goalRecs);
 
   // Extract reference prices from latest savings record
   const sortedSavings = [...savingsRecs].sort(
@@ -367,5 +459,5 @@ export async function syncFromAirtable(
     ? (latest.fields['$BTC Price for Reference'] as number)
     : undefined;
 
-  return { accounts, snapshots, expenses, spyPrice, btcPrice };
+  return { accounts, snapshots, expenses, goals, spyPrice, btcPrice };
 }
