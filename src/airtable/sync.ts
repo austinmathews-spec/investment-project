@@ -1,4 +1,4 @@
-import { listRecords, createRecord, updateRecord, deleteRecord, createTable } from './client';
+import { listRecords, createRecord, updateRecord, deleteRecord, createTable, listTables } from './client';
 import {
   Account,
   AccountType,
@@ -404,6 +404,12 @@ export async function ensureGoalsTable(
   pat: string,
   baseId: string
 ): Promise<void> {
+  try {
+    const tables = await listTables(pat, baseId);
+    if (tables.some(t => t.name === 'Goals')) return;
+  } catch {
+    // If listing tables fails, fall through to create attempt
+  }
   await createTable(pat, baseId, 'Goals', [
     { name: 'Name', type: 'singleLineText' },
     { name: 'TargetAmount', type: 'number', options: { precision: 2 } },

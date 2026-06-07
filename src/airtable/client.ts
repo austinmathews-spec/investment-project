@@ -130,7 +130,9 @@ export async function createTable(
   });
   if (!res.ok) {
     const err = await res.json();
-    if (err?.error?.type === 'DUPLICATE_TABLE_NAME') {
+    const errType = err?.error?.type ?? '';
+    const errMsg: string = (err?.error?.message ?? '').toLowerCase();
+    if (errType === 'DUPLICATE_TABLE_NAME' || errMsg.includes('already exist')) {
       return; // Table already exists
     }
     throw new Error(`Airtable createTable error: ${JSON.stringify(err)}`);
