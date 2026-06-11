@@ -97,20 +97,42 @@ const demoAccounts: Account[] = [
 
 // ─── Demo snapshots (12-month growth from ~$400k to ~$605k) ──────
 
-const demoSnapshots: NetWorthSnapshot[] = [
-  { id: 'demo-snap-01', date: '2025-06-01', totalAssets: 405000, totalLiabilities: 0, netWorth: 405000, accountBalances: {} },
-  { id: 'demo-snap-02', date: '2025-07-01', totalAssets: 418000, totalLiabilities: 0, netWorth: 418000, accountBalances: {} },
-  { id: 'demo-snap-03', date: '2025-08-01', totalAssets: 432000, totalLiabilities: 0, netWorth: 432000, accountBalances: {} },
-  { id: 'demo-snap-04', date: '2025-09-01', totalAssets: 448000, totalLiabilities: 0, netWorth: 448000, accountBalances: {} },
-  { id: 'demo-snap-05', date: '2025-10-01', totalAssets: 461000, totalLiabilities: 0, netWorth: 461000, accountBalances: {} },
-  { id: 'demo-snap-06', date: '2025-11-01', totalAssets: 472000, totalLiabilities: 0, netWorth: 472000, accountBalances: {} },
-  { id: 'demo-snap-07', date: '2025-12-01', totalAssets: 490000, totalLiabilities: 0, netWorth: 490000, accountBalances: {} },
-  { id: 'demo-snap-08', date: '2026-01-01', totalAssets: 510000, totalLiabilities: 0, netWorth: 510000, accountBalances: {} },
-  { id: 'demo-snap-09', date: '2026-02-01', totalAssets: 535000, totalLiabilities: 0, netWorth: 535000, accountBalances: {} },
-  { id: 'demo-snap-10', date: '2026-03-01', totalAssets: 558000, totalLiabilities: 0, netWorth: 558000, accountBalances: {} },
-  { id: 'demo-snap-11', date: '2026-04-01', totalAssets: 580000, totalLiabilities: 0, netWorth: 580000, accountBalances: {} },
-  { id: 'demo-snap-12', date: '2026-05-28', totalAssets: 605000, totalLiabilities: 0, netWorth: 605000, accountBalances: {} },
+// Per-account balance history scaled along net-worth growth with a small
+// deterministic wiggle so sparklines and the portfolio map have rich data.
+function demoBalancesFor(netWorth: number, snapshotIndex: number): Record<string, number> {
+  const finalNetWorth = 605000;
+  const ratio = netWorth / finalNetWorth;
+  const balances: Record<string, number> = {};
+  demoAccounts.forEach((account, i) => {
+    const wiggle = 1 + Math.sin(snapshotIndex * 1.7 + i * 2.3) * 0.04;
+    balances[account.id] = Math.round(account.balance * ratio * wiggle);
+  });
+  return balances;
+}
+
+const demoSnapshotSeed: { id: string; date: string; netWorth: number }[] = [
+  { id: 'demo-snap-01', date: '2025-06-01', netWorth: 405000 },
+  { id: 'demo-snap-02', date: '2025-07-01', netWorth: 418000 },
+  { id: 'demo-snap-03', date: '2025-08-01', netWorth: 432000 },
+  { id: 'demo-snap-04', date: '2025-09-01', netWorth: 448000 },
+  { id: 'demo-snap-05', date: '2025-10-01', netWorth: 461000 },
+  { id: 'demo-snap-06', date: '2025-11-01', netWorth: 472000 },
+  { id: 'demo-snap-07', date: '2025-12-01', netWorth: 490000 },
+  { id: 'demo-snap-08', date: '2026-01-01', netWorth: 510000 },
+  { id: 'demo-snap-09', date: '2026-02-01', netWorth: 535000 },
+  { id: 'demo-snap-10', date: '2026-03-01', netWorth: 558000 },
+  { id: 'demo-snap-11', date: '2026-04-01', netWorth: 580000 },
+  { id: 'demo-snap-12', date: '2026-05-28', netWorth: 605000 },
 ];
+
+const demoSnapshots: NetWorthSnapshot[] = demoSnapshotSeed.map((s, i) => ({
+  id: s.id,
+  date: s.date,
+  totalAssets: s.netWorth,
+  totalLiabilities: 0,
+  netWorth: s.netWorth,
+  accountBalances: demoBalancesFor(s.netWorth, i),
+}));
 
 // ─── Demo goals ──────────────────────────────────────────────────
 

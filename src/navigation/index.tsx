@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, useWindowDimensions } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { Colors, FontSizes, Spacing } from '../theme';
+import PortfolioMapScreen from '../screens/PortfolioMapScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import AccountsScreen from '../screens/AccountsScreen';
 import AccountDetailScreen from '../screens/AccountDetailScreen';
@@ -21,6 +22,8 @@ type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 
 function getTabIcon(route: string): FeatherIconName {
   switch (route) {
+    case 'Map':
+      return 'globe';
     case 'DashboardTab':
       return 'home';
     case 'AccountsTab':
@@ -86,7 +89,19 @@ export default function AppNavigator() {
   const isDesktop = screenWidth >= 768;
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      theme={{
+        ...DarkTheme,
+        colors: {
+          ...DarkTheme.colors,
+          background: Colors.background,
+          card: Colors.background,
+          border: Colors.border,
+          text: Colors.textPrimary,
+          primary: Colors.accent,
+        },
+      }}
+    >
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ color, size }) => {
@@ -110,6 +125,15 @@ export default function AppNavigator() {
           headerShown: false,
         })}
       >
+        <Tab.Screen name="Map" component={PortfolioMapScreen} options={{
+          tabBarLabel: 'Map',
+          headerShown: true,
+          headerTitle: 'Portfolio Map',
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.textPrimary,
+          headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
+          headerShadowVisible: false,
+        }} />
         <Tab.Screen
           name="DashboardTab"
           component={DashboardStackScreen}
