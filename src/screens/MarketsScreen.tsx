@@ -9,6 +9,8 @@ import {
   Linking,
   RefreshControl,
   Platform,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -16,13 +18,19 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, Spacing, FontSizes, BorderRadius, TouchTarget } from '../theme';
 import AnimatedNumber from '../components/AnimatedNumber';
 import ScreenSkeleton from '../components/ScreenSkeleton';
+import BottomSheet from '../components/BottomSheet';
+import LargeChart from '../components/LargeChart';
 import { loadFinnhubKey } from '../storage';
 import {
   DEFAULT_WATCHLIST,
+  HISTORY_RANGES,
+  HistoryPoint,
+  HistoryRange,
   MarketQuote,
   MarketNewsItem,
   fetchQuotes,
   fetchBtcQuote,
+  fetchHistory,
   fetchMarketNews,
   fetchQuote,
 } from '../markets/finnhub';
@@ -63,14 +71,21 @@ async function saveWatchlist(list: { symbol: string; name: string }[]): Promise<
 const QuoteRow = React.memo(function QuoteRow({
   quote,
   onRemove,
+  onPress,
 }: {
   quote: MarketQuote;
   onRemove?: (symbol: string) => void;
+  onPress: (quote: MarketQuote) => void;
 }) {
   const positive = quote.change >= 0;
   const color = positive ? Colors.positive : Colors.negative;
   return (
-    <View style={styles.quoteRow}>
+    <TouchableOpacity
+      style={styles.quoteRow}
+      onPress={() => onPress(quote)}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${quote.symbol} chart`}
+    >
       <View style={styles.quoteLeft}>
         <Text style={styles.quoteSymbol}>{quote.symbol}</Text>
         <Text style={styles.quoteName} numberOfLines={1}>
@@ -83,7 +98,7 @@ const QuoteRow = React.memo(function QuoteRow({
           {positive ? '▲' : '▼'} {formatPrice(Math.abs(quote.change))} ({Math.abs(quote.changePercent).toFixed(2)}%)
         </Text>
       </View>
-      {onRemove && (
+      {onRemove ? (
         <TouchableOpacity
           style={styles.removeButton}
           onPress={() => onRemove(quote.symbol)}
@@ -91,10 +106,124 @@ const QuoteRow = React.memo(function QuoteRow({
         >
           <Feather name="x" size={14} color={Colors.textTertiary} />
         </TouchableOpacity>
+      ) : (
+        <Feather name="chevron-right" size={16} color={Colors.textTertiary} style={styles.chevron} />
       )}
-    </View>
+    </TouchableOpacity>
   );
 });
+
+function StockDetail({ quote, onClose }: { quote: MarketQuote; onClose: () => void }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const [range, setRange] = useState<HistoryRange>('1D');
+  const [history, setHistory] = useState<HistoryPoint[] | null>(null);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const cache = useRef<Partial<Record<HistoryRange, HistoryPoint[]>>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const cached = cache.current[range];
+    if (cached) {
+      setHistory(cached);
+      return;
+    }
+    setHistory(null);
+    setChartError(null);
+    fetchHistory(quote, range)
+      .then((points) => {
+        if (cancelled) return;
+        cache.current[range] = points;
+        setHistory(points);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setChartError(err instanceof Error ? err.message : 'Failed to load chart');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quote, range]);
+
+  const positive = quote.change >= 0;
+  const color = positive ? Colors.positive : Colors.negative;
+  const chartWidth = Math.min(windowWidth, 720) - Spacing.lg * 2;
+
+  const rangeStart = history && history.length > 1 ? history[0].value : null;
+  const rangeChange = rangeStart !== null ? quote.price - rangeStart : null;
+  const rangeChangePct = rangeStart ? ((quote.price - rangeStart) / rangeStart) * 100 : null;
+  const rangePositive = (rangeChange ?? 0) >= 0;
+  const rangeColor = rangePositive ? Colors.positive : Colors.negative;
+
+  return (
+    <View style={styles.detailContainer}>
+      <View style={styles.detailHeader}>
+        <View>
+          <Text style={styles.detailSymbol}>{quote.symbol}</Text>
+          <Text style={styles.detailName}>{quote.name}</Text>
+        </View>
+        <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityLabel="Close">
+          <Feather name="x" size={20} color={Colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <AnimatedNumber value={quote.price} format={formatPrice} style={styles.detailPrice} />
+      <Text style={[styles.detailChange, { color }]}>
+        {positive ? '▲' : '▼'} {formatPrice(Math.abs(quote.change))} ({Math.abs(quote.changePercent).toFixed(2)}%) today
+      </Text>
+      {rangeChange !== null && rangeChangePct !== null && range !== '1D' && (
+        <Text style={[styles.detailRangeChange, { color: rangeColor }]}>
+          {rangePositive ? '▲' : '▼'} {formatPrice(Math.abs(rangeChange))} ({Math.abs(rangeChangePct).toFixed(2)}%) past {range}
+        </Text>
+      )}
+
+      <View style={styles.chartArea}>
+        {chartError ? (
+          <Text style={styles.chartErrorText}>{chartError}</Text>
+        ) : history ? (
+          <LargeChart
+            data={history}
+            width={chartWidth}
+            height={240}
+            color={rangeColor}
+          />
+        ) : (
+          <ActivityIndicator color={Colors.accent} />
+        )}
+      </View>
+
+      <View style={styles.rangeRow}>
+        {HISTORY_RANGES.map((r) => (
+          <TouchableOpacity
+            key={r}
+            style={[styles.rangeChip, range === r && styles.rangeChipActive]}
+            onPress={() => setRange(r)}
+          >
+            <Text style={[styles.rangeChipText, range === r && styles.rangeChipTextActive]}>{r}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>Prev close</Text>
+          <Text style={styles.statValue}>{formatPrice(quote.prevClose)}</Text>
+        </View>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>Day change</Text>
+          <Text style={[styles.statValue, { color }]}>
+            {positive ? '+' : '-'}{formatPrice(Math.abs(quote.change))}
+          </Text>
+        </View>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>Day %</Text>
+          <Text style={[styles.statValue, { color }]}>
+            {positive ? '+' : '-'}{Math.abs(quote.changePercent).toFixed(2)}%
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 const NewsCard = React.memo(function NewsCard({ item }: { item: MarketNewsItem }) {
   const open = useCallback(() => {
@@ -136,6 +265,7 @@ export default function MarketsScreen() {
   const [addSymbol, setAddSymbol] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [selected, setSelected] = useState<MarketQuote | null>(null);
   const quoteTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const newsTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -225,6 +355,12 @@ export default function MarketsScreen() {
     }
   }, [addSymbol, apiKey, watchlist]);
 
+  const handleSelect = useCallback((quote: MarketQuote) => {
+    setSelected(quote);
+  }, []);
+
+  const closeDetail = useCallback(() => setSelected(null), []);
+
   const handleRemove = useCallback(
     async (symbol: string) => {
       const next = watchlist.filter((w) => w.symbol !== symbol);
@@ -288,9 +424,14 @@ export default function MarketsScreen() {
         </View>
 
         <View style={styles.quoteList}>
-          {btc && <QuoteRow quote={btc} />}
+          {btc && <QuoteRow quote={btc} onPress={handleSelect} />}
           {quotes.map((q) => (
-            <QuoteRow key={q.symbol} quote={q} onRemove={editMode ? handleRemove : undefined} />
+            <QuoteRow
+              key={q.symbol}
+              quote={q}
+              onRemove={editMode ? handleRemove : undefined}
+              onPress={handleSelect}
+            />
           ))}
         </View>
 
@@ -335,6 +476,10 @@ export default function MarketsScreen() {
           news.map((item) => <NewsCard key={item.id} item={item} />)
         )}
       </View>
+
+      <BottomSheet visible={selected !== null} onClose={closeDetail}>
+        {selected && <StockDetail quote={selected} onClose={closeDetail} />}
+      </BottomSheet>
     </ScrollView>
   );
 }
@@ -433,6 +578,121 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     fontWeight: '600',
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  chevron: {
+    marginLeft: Spacing.sm,
+  },
+  detailContainer: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.md,
+  },
+  detailSymbol: {
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  detailName: {
+    fontSize: FontSizes.sm,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.cardBackgroundLight,
+  },
+  detailPrice: {
+    fontSize: FontSizes.xxl,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  detailChange: {
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  detailRangeChange: {
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  chartArea: {
+    minHeight: 280,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.md,
+  },
+  chartErrorText: {
+    fontSize: FontSizes.sm,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  rangeChip: {
+    minWidth: 48,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.round,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  rangeChipActive: {
+    borderColor: Colors.accent,
+    backgroundColor: Colors.accentDim,
+  },
+  rangeChipText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  rangeChipTextActive: {
+    color: Colors.accent,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    marginTop: Spacing.lg,
+    backgroundColor: Colors.cardBackground,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  statLabel: {
+    fontSize: FontSizes.xs,
+    color: Colors.textTertiary,
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: FontSizes.sm,
+    fontWeight: '600',
+    color: Colors.textPrimary,
     fontVariant: ['tabular-nums'],
   },
   removeButton: {
