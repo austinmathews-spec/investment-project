@@ -10,6 +10,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import AccountsScreen from '../screens/AccountsScreen';
 import AccountDetailScreen from '../screens/AccountDetailScreen';
 import TrendsScreen from '../screens/TrendsScreen';
+import MarketsScreen from '../screens/MarketsScreen';
 import ForecastScreen from '../screens/ForecastScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -30,6 +31,8 @@ function getTabIcon(route: string): FeatherIconName {
       return 'credit-card';
     case 'Trends':
       return 'trending-up';
+    case 'Markets':
+      return 'activity';
     case 'Forecast':
       return 'bar-chart-2';
     case 'Goals':
@@ -145,6 +148,13 @@ export default function AppNavigator() {
           options={{ tabBarLabel: 'Accounts' }}
         />
         <Tab.Screen name="Trends" component={TrendsScreen} options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.textPrimary,
+          headerTitleStyle: { fontWeight: '700', fontSize: FontSizes.lg },
+          headerShadowVisible: false,
+        }} />
+        <Tab.Screen name="Markets" component={MarketsScreen} options={{
           headerShown: true,
           headerStyle: { backgroundColor: Colors.background },
           headerTintColor: Colors.textPrimary,

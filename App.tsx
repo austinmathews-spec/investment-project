@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect, createContext, useContext } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AppNavigator from './src/navigation';
 import LoginScreen from './src/screens/LoginScreen';
+import DemoBanner from './src/components/DemoBanner';
 import { setDemoMode } from './src/storage';
 
 const APP_PASSWORD = process.env.EXPO_PUBLIC_APP_PASSWORD || 'invest2024';
@@ -63,7 +64,10 @@ export default function App() {
   return (
     <DemoContext.Provider value={isDemo}>
       <StatusBar style="light" />
-      <AppNavigator />
+      <View style={{ flex: 1 }}>
+        {isDemo && <DemoBanner />}
+        <AppNavigator />
+      </View>
     </DemoContext.Provider>
   );
 }

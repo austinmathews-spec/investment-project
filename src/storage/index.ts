@@ -14,6 +14,7 @@ import { getDemoData } from '../data/demoData';
 
 const STORAGE_KEY = '@sofi_dashboard_data';
 const CONFIG_KEY = '@sofi_airtable_config';
+const FINNHUB_KEY = '@sofi_finnhub_key';
 
 // ─── Demo mode ───────────────────────────────────────────────────
 
@@ -60,6 +61,28 @@ export async function saveAirtableConfig(config: AirtableConfig): Promise<void> 
 
 export async function clearAirtableConfig(): Promise<void> {
   await AsyncStorage.removeItem(CONFIG_KEY);
+}
+
+// ─── Finnhub key persistence ─────────────────────────────────────
+
+const ENV_FINNHUB_KEY = process.env.EXPO_PUBLIC_FINNHUB_KEY || '';
+
+export async function loadFinnhubKey(): Promise<string | null> {
+  const raw = await AsyncStorage.getItem(FINNHUB_KEY);
+  if (raw) return raw;
+  if (ENV_FINNHUB_KEY) {
+    await AsyncStorage.setItem(FINNHUB_KEY, ENV_FINNHUB_KEY);
+    return ENV_FINNHUB_KEY;
+  }
+  return null;
+}
+
+export async function saveFinnhubKey(key: string): Promise<void> {
+  await AsyncStorage.setItem(FINNHUB_KEY, key);
+}
+
+export async function clearFinnhubKey(): Promise<void> {
+  await AsyncStorage.removeItem(FINNHUB_KEY);
 }
 
 // ─── Core data persistence ───────────────────────────────────────

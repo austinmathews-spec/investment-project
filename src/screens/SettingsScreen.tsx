@@ -20,6 +20,9 @@ import {
   syncWithAirtable,
   resetAppData,
   isDemoMode,
+  loadFinnhubKey,
+  saveFinnhubKey,
+  clearFinnhubKey,
 } from '../storage';
 import { AirtableConfig } from '../types';
 import { Feather } from '@expo/vector-icons';
@@ -31,6 +34,8 @@ export default function SettingsScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [finnhubKey, setFinnhubKey] = useState('');
+  const [finnhubSaved, setFinnhubSaved] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,6 +50,27 @@ export default function SettingsScreen() {
       setBaseId(config.baseId);
       setIsConnected(true);
     }
+    const fhKey = await loadFinnhubKey();
+    if (fhKey) {
+      setFinnhubKey(fhKey);
+      setFinnhubSaved(true);
+    }
+  }
+
+  async function handleSaveFinnhub() {
+    if (!finnhubKey.trim()) {
+      await clearFinnhubKey();
+      setFinnhubSaved(false);
+      return;
+    }
+    await saveFinnhubKey(finnhubKey.trim());
+    setFinnhubSaved(true);
+  }
+
+  async function handleClearFinnhub() {
+    await clearFinnhubKey();
+    setFinnhubKey('');
+    setFinnhubSaved(false);
   }
 
   async function handleConnect() {
@@ -214,6 +240,49 @@ export default function SettingsScreen() {
           <Text style={styles.connectButtonText}>Connect & Sync</Text>
         </TouchableOpacity>
       )}
+
+      <Text style={[styles.title, { marginTop: Spacing.xl }]}>Market Data</Text>
+      <Text style={styles.subtitle}>
+        Power the Markets tab with live quotes and news from Finnhub.
+      </Text>
+
+      <Card>
+        <View style={styles.statusRow}>
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: finnhubSaved ? Colors.positive : Colors.textTertiary },
+            ]}
+          />
+          <Text style={styles.statusText}>
+            {finnhubSaved ? 'Finnhub Connected' : 'Not Connected'}
+          </Text>
+        </View>
+        <Text style={[styles.label, { marginTop: Spacing.md }]}>Finnhub API Key</Text>
+        <TextInput
+          style={styles.input}
+          value={finnhubKey}
+          onChangeText={setFinnhubKey}
+          placeholder="Finnhub API key"
+          placeholderTextColor={Colors.textTertiary}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Text style={styles.hint}>
+          Get a free key at finnhub.io — sign up and copy the API key from your dashboard.
+        </Text>
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity style={styles.syncButton} onPress={handleSaveFinnhub}>
+            <Text style={styles.syncButtonText}>Save Key</Text>
+          </TouchableOpacity>
+          {finnhubSaved && (
+            <TouchableOpacity style={styles.disconnectButton} onPress={handleClearFinnhub}>
+              <Text style={styles.disconnectButtonText}>Remove Key</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Card>
 
       <Card>
         <Text style={styles.infoTitle}>What syncs from Airtable</Text>
