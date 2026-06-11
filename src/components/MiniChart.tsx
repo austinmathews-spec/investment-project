@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Svg, { Polyline, Defs, LinearGradient as SvgLinearGradient, Stop, Polygon } from 'react-native-svg';
 import { Colors } from '../theme';
@@ -18,6 +18,7 @@ export default function MiniChart({
   color = Colors.accent,
   showFill = true,
 }: MiniChartProps) {
+  const gradientId = useId().replace(/[^a-zA-Z0-9]/g, '');
   if (data.length < 2) return null;
 
   const padding = 4;
@@ -43,13 +44,13 @@ export default function MiniChart({
     <View style={[styles.container, { width, height }]}>
       <Svg width={width} height={height}>
         <Defs>
-          <SvgLinearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+          <SvgLinearGradient id={`chartGrad-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={color} stopOpacity="0.3" />
             <Stop offset="1" stopColor={color} stopOpacity="0" />
           </SvgLinearGradient>
         </Defs>
         {showFill && (
-          <Polygon points={fillPoints} fill="url(#chartGrad)" />
+          <Polygon points={fillPoints} fill={`url(#chartGrad-${gradientId})`} />
         )}
         <Polyline
           points={points.join(' ')}

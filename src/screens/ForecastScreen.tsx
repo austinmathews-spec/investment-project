@@ -29,6 +29,7 @@ import Card from '../components/Card';
 import LargeChart from '../components/LargeChart';
 import InputField from '../components/InputField';
 import SliderInput from '../components/SliderInput';
+import ScreenSkeleton from '../components/ScreenSkeleton';
 
 const fmtDollar = (v: number) => {
   if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
@@ -146,7 +147,7 @@ export default function ForecastScreen() {
     }
   };
 
-  if (!data) return null;
+  if (!data) return <ScreenSkeleton />;
 
   return (
     <View style={styles.container}>

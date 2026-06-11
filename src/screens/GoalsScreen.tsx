@@ -21,6 +21,7 @@ import Card from '../components/Card';
 import ProgressBar from '../components/ProgressBar';
 import InputField from '../components/InputField';
 import FilterChips from '../components/FilterChips';
+import ScreenSkeleton from '../components/ScreenSkeleton';
 
 const GOAL_COLORS = Colors.goalColors;
 
@@ -109,7 +110,7 @@ export default function GoalsScreen() {
     }
   };
 
-  if (!data) return null;
+  if (!data) return <ScreenSkeleton />;
 
   const getGoalCurrent = (goal: Goal): number => {
     if (goal.linkedAccountIds && goal.linkedAccountIds.length > 0) {

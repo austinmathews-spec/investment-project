@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useId, useState } from 'react';
 import { View, Text, StyleSheet, Platform, GestureResponderEvent } from 'react-native';
 import Svg, { Polyline, Defs, LinearGradient as SvgLinearGradient, Stop, Polygon, Line, Circle, Text as SvgText } from 'react-native-svg';
 import { Colors, FontSizes, Spacing } from '../theme';
@@ -29,6 +29,7 @@ export default function LargeChart({
   showGrid = true,
 }: LargeChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const gradientId = useId().replace(/[^a-zA-Z0-9]/g, '');
 
   if (data.length < 2) return null;
 
@@ -144,7 +145,7 @@ export default function LargeChart({
       >
         <Svg width={width} height={height}>
           <Defs>
-            <SvgLinearGradient id="lgChartGrad" x1="0" y1="0" x2="0" y2="1">
+            <SvgLinearGradient id={`lgChartGrad-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor={color} stopOpacity="0.25" />
               <Stop offset="1" stopColor={color} stopOpacity="0" />
             </SvgLinearGradient>
@@ -167,7 +168,7 @@ export default function LargeChart({
               );
             })}
 
-          <Polygon points={fillPoints} fill="url(#lgChartGrad)" />
+          <Polygon points={fillPoints} fill={`url(#lgChartGrad-${gradientId})`} />
           <Polyline
             points={polylinePoints}
             fill="none"
@@ -194,7 +195,7 @@ export default function LargeChart({
                 cy={activePoint.y}
                 r={5}
                 fill={color}
-                stroke={Colors.white}
+                stroke={Colors.background}
                 strokeWidth={2}
               />
             </>

@@ -8,6 +8,7 @@ import { loadAppData } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 import FilterChips from '../components/FilterChips';
+import ScreenSkeleton from '../components/ScreenSkeleton';
 
 export default function TrendsScreen() {
   const { width: screenWidth } = useWindowDimensions();
@@ -20,7 +21,7 @@ export default function TrendsScreen() {
     }, [])
   );
 
-  if (!data) return null;
+  if (!data) return <ScreenSkeleton />;
 
   const allSnapshots = data.snapshots;
 

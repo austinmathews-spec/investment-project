@@ -19,6 +19,7 @@ import { formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/fo
 import InputField from '../components/InputField';
 import FilterChips from '../components/FilterChips';
 import MiniChart from '../components/MiniChart';
+import ScreenSkeleton from '../components/ScreenSkeleton';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'checking', label: 'Checking' },
@@ -88,7 +89,7 @@ export default function AccountsScreen() {
 
 
 
-  if (!data) return null;
+  if (!data) return <ScreenSkeleton />;
 
   const filteredAccounts = data.accounts.filter(a => {
     if (sourceFilter !== 'All' && a.sourceTable !== sourceFilter) return false;
