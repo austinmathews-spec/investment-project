@@ -141,7 +141,7 @@ const MapNode = memo(function MapNode({ node, selected, compact, onSelect }: Map
           {shortName}
         </Text>
         <Text style={[styles.nodeChange, { color, fontSize: Math.max(9, Math.min(13, node.r / 5)) }]}>
-          {positive ? '▲' : '▼'} {Math.abs(node.changePercent * 100).toFixed(1)}%
+          {positive ? '▲' : '▼'} {formatCurrency(node.account.balance)}
         </Text>
         {showSparkline && (
           <MiniChart data={sparkData} width={Math.min(60, node.r)} height={20} color={color} showFill={false} />
