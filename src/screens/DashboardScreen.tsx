@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,63 @@ import { loadAppData, syncWithAirtable, loadAirtableConfig, reorderGoals, isDemo
 import { formatCurrency, formatCurrencyDecimal, formatDate, formatDateLong, accountTypeLabel, formatAgeYear } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 import MiniChart from '../components/MiniChart';
+import AnimatedNumber from '../components/AnimatedNumber';
+import Skeleton from '../components/Skeleton';
 import ProgressBar from '../components/ProgressBar';
 import PieChart from '../components/PieChart';
 import BarChart from '../components/BarChart';
+
+const AccountTile = memo(function AccountTile({
+  account,
+  history,
+  onPress,
+}: {
+  account: AppData['accounts'][number];
+  history: number[];
+  onPress: (id: string, name: string) => void;
+}) {
+  const sparkColor = history.length >= 2 && history[history.length - 1] >= history[0] ? Colors.positive : Colors.negative;
+  return (
+    <TouchableOpacity
+      style={styles.accountGridTile}
+      activeOpacity={0.6}
+      onPress={() => onPress(account.id, account.name)}
+    >
+      <View style={styles.accountGridTop}>
+        <View style={styles.accountGridInfo}>
+          <Text style={styles.accountGridName} numberOfLines={1}>{account.name}</Text>
+          <Text style={[styles.accountGridBalance, account.balance < 0 && { color: Colors.negative }]}>
+            {formatCurrencyDecimal(account.balance)}
+          </Text>
+          <Text style={styles.accountGridMeta} numberOfLines={1}>
+            {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
+          </Text>
+        </View>
+        {history.length >= 2 && (
+          <View style={styles.accountGridChart}>
+            <MiniChart data={history} width={80} height={36} color={sparkColor} showFill={false} />
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+function DashboardSkeleton() {
+  return (
+    <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, maxWidth: 960, width: '100%', alignSelf: 'center' }}>
+      <Skeleton width={90} height={14} />
+      <Skeleton width={240} height={40} style={{ marginTop: Spacing.sm }} />
+      <Skeleton width={160} height={16} style={{ marginTop: Spacing.sm }} />
+      <Skeleton width="100%" height={200} borderRadius={BorderRadius.md} style={{ marginTop: Spacing.xl }} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.xl }}>
+        {[0, 1, 2, 3].map(i => (
+          <Skeleton key={i} width="48.5%" height={92} borderRadius={BorderRadius.md} />
+        ))}
+      </View>
+    </View>
+  );
+}
 
 export default function DashboardScreen() {
   const { width: screenWidth } = useWindowDimensions();
@@ -58,7 +112,25 @@ export default function DashboardScreen() {
     setRefreshing(false);
   };
 
-  if (!data) return null;
+  const accountHistories = useMemo(() => {
+    if (!data) return {} as Record<string, number[]>;
+    const sorted = [...data.snapshots].sort((a, b) => a.date.localeCompare(b.date));
+    const result: Record<string, number[]> = {};
+    data.accounts.forEach(account => {
+      const history = sorted
+        .filter(s => s.accountBalances[account.id] !== undefined)
+        .map(s => s.accountBalances[account.id]);
+      history.push(account.balance);
+      result[account.id] = history;
+    });
+    return result;
+  }, [data]);
+
+  const navigateToAccount = useCallback((accountId: string, accountName: string) => {
+    navigation.navigate('AccountDetail', { accountId, accountName });
+  }, [navigation]);
+
+  if (!data) return <DashboardSkeleton />;
 
   const visibleAccounts = data.accounts;
 
@@ -116,10 +188,6 @@ export default function DashboardScreen() {
   const latestSnapshot = data.snapshots.length > 0 ? data.snapshots[data.snapshots.length - 1] : null;
   const dataDate = latestSnapshot?.date || (data.accounts.length > 0 ? data.accounts[0].lastUpdated : null);
 
-  const navigateToAccount = (accountId: string, accountName: string) => {
-    navigation.navigate('AccountDetail', { accountId, accountName });
-  };
-
   return (
     <ScrollView
       style={styles.container}
@@ -136,7 +204,7 @@ export default function DashboardScreen() {
       {/* Net Worth Hero */}
       <View style={styles.heroSection}>
         <Text style={styles.heroLabel}>Net Worth</Text>
-        <Text style={styles.heroAmount}>{formatCurrencyDecimal(totalBalance)}</Text>
+        <AnimatedNumber value={totalBalance} format={formatCurrencyDecimal} style={styles.heroAmount} />
         {dataDate && (
           <Text style={styles.heroDate}>as of {formatDate(dataDate)}</Text>
         )}
@@ -173,39 +241,14 @@ export default function DashboardScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Accounts</Text>
         <View style={styles.accountGrid}>
-          {visibleAccounts.map((account) => {
-            const history = data.snapshots
-              .filter(s => s.accountBalances[account.id] !== undefined)
-              .sort((a, b) => a.date.localeCompare(b.date))
-              .map(s => s.accountBalances[account.id]);
-            history.push(account.balance);
-            const sparkColor = history.length >= 2 && history[history.length - 1] >= history[0] ? Colors.positive : Colors.negative;
-            return (
-              <TouchableOpacity
-                key={account.id}
-                style={styles.accountGridTile}
-                activeOpacity={0.6}
-                onPress={() => navigateToAccount(account.id, account.name)}
-              >
-                <View style={styles.accountGridTop}>
-                  <View style={styles.accountGridInfo}>
-                    <Text style={styles.accountGridName} numberOfLines={1}>{account.name}</Text>
-                    <Text style={[styles.accountGridBalance, account.balance < 0 && { color: Colors.negative }]}>
-                      {formatCurrencyDecimal(account.balance)}
-                    </Text>
-                    <Text style={styles.accountGridMeta} numberOfLines={1}>
-                      {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
-                    </Text>
-                  </View>
-                  {history.length >= 2 && (
-                    <View style={styles.accountGridChart}>
-                      <MiniChart data={history} width={80} height={36} color={sparkColor} showFill={false} />
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+          {visibleAccounts.map((account) => (
+            <AccountTile
+              key={account.id}
+              account={account}
+              history={accountHistories[account.id] || []}
+              onPress={navigateToAccount}
+            />
+          ))}
         </View>
       </View>
 
@@ -218,18 +261,7 @@ export default function DashboardScreen() {
               <PieChart
                 title="Allocation"
                 data={(() => {
-                  const typeColors: Record<string, string> = {
-                    '401k': '#6846EB',
-                    roth_ira: '#00AAFF',
-                    traditional_ira: '#3D7FFF',
-                    savings: '#00C805',
-                    checking: '#00D4AA',
-                    crypto: '#FFB800',
-                    brokerage: '#FF5000',
-                    hsa: '#E91E63',
-                    '529': '#9C27B0',
-                    other: '#9DA0A6',
-                  };
+                  const typeColors = Colors.accountTypeColors;
                   const groups: Record<string, number> = {};
                   visibleAccounts.forEach(a => {
                     const label = accountTypeLabel(a.type);
@@ -240,7 +272,7 @@ export default function DashboardScreen() {
                     .sort((a, b) => b[1] - a[1])
                     .map(([label, value]) => {
                       const typeKey = Object.entries({ checking: 'Checking', savings: 'Savings', brokerage: 'Brokerage', traditional_ira: 'Traditional IRA', roth_ira: 'Roth IRA', '401k': '401(k)', hsa: 'HSA', '529': '529 Plan', crypto: 'Crypto', other: 'Other' }).find(([, v]) => v === label)?.[0] || 'other';
-                      return { label, value, color: typeColors[typeKey] || '#9DA0A6' };
+                      return { label, value, color: typeColors[typeKey] || typeColors.other };
                     });
                 })()}
                 size={160}
@@ -633,7 +665,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   goalArrow: {
-    padding: 2,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   goalArrowDisabled: {
     opacity: 0.3,

@@ -18,6 +18,7 @@ import { loadAppData, saveAccount } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate, accountTypeLabel } from '../utils/format';
 import LargeChart from '../components/LargeChart';
 import InputField from '../components/InputField';
+import ScreenSkeleton from '../components/ScreenSkeleton';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'checking', label: 'Checking' },
@@ -52,7 +53,7 @@ export default function AccountDetailScreen() {
     }, [])
   );
 
-  if (!data) return null;
+  if (!data) return <ScreenSkeleton />;
 
   const account = data.accounts.find((a) => a.id === accountId);
   if (!account) return null;
