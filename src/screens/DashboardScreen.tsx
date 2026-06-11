@@ -41,8 +41,8 @@ const AccountTile = memo(function AccountTile({
       <View style={styles.accountGridTop}>
         <View style={styles.accountGridInfo}>
           <Text style={styles.accountGridName} numberOfLines={1}>{account.name}</Text>
-          <Text style={[styles.accountGridBalance, account.balance < 0 && { color: Colors.negative }]}>
-            {formatCurrencyDecimal(account.balance)}
+          <Text style={[styles.accountGridBalance, account.balance < 0 && { color: Colors.negative }]} numberOfLines={1}>
+            {formatCurrency(account.balance)}
           </Text>
           <Text style={styles.accountGridMeta} numberOfLines={1}>
             {accountTypeLabel(account.type)}{account.institution ? ` · ${account.institution}` : ''}
