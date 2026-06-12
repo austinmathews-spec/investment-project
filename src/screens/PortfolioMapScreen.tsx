@@ -286,6 +286,8 @@ export default function PortfolioMapScreen() {
   });
   const rafPending = useRef(false);
   const pendingUpdate = useRef<{ tx: number; ty: number; sc: number } | null>(null);
+  const fit = useRef({ tx: 0, ty: 0, sc: 1, w: 0, h: 0 });
+  const wheelSnapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async () => {
     const config = await loadAirtableConfig();
@@ -364,7 +366,9 @@ export default function PortfolioMapScreen() {
 
   const scheduleTransform = useCallback(
     (nextTx: number, nextTy: number, nextSc: number) => {
-      pendingUpdate.current = { tx: nextTx, ty: nextTy, sc: Math.min(3, Math.max(0.3, nextSc)) };
+      // Allow a little elastic give past the fit scale; snap-back restores it on release.
+      const minScale = Math.max(0.3, fit.current.sc * 0.75);
+      pendingUpdate.current = { tx: nextTx, ty: nextTy, sc: Math.min(3, Math.max(minScale, nextSc)) };
       if (!rafPending.current) {
         rafPending.current = true;
         requestAnimationFrame(applyTransform);
@@ -388,12 +392,50 @@ export default function PortfolioMapScreen() {
     const fitScale = Math.min(screenWidth / w, mapHeight / h, 1.4);
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
+    fit.current = { tx: -cx * fitScale, ty: -cy * fitScale, sc: fitScale, w, h };
     scheduleTransform(-cx * fitScale, -cy * fitScale, fitScale);
   }, [nodes, screenWidth, mapHeight, scheduleTransform]);
 
   useEffect(() => {
     fitToView();
   }, [fitToView]);
+
+  // After a gesture ends, snap back to a neutral transform: never more zoomed
+  // out than the fit view, and never panned so far that the map leaves view.
+  const snapBack = useCallback(() => {
+    if (pendingUpdate.current) applyTransform();
+    const f = fit.current;
+    if (f.w === 0) return;
+    const targetSc = Math.min(3, Math.max(f.sc, sc.current));
+    const slackX = Math.max(0, (f.w * targetSc - screenWidth) / 2) + 60;
+    const slackY = Math.max(0, (f.h * targetSc - mapHeight) / 2) + 60;
+    const targetTx = Math.min(f.tx + slackX, Math.max(f.tx - slackX, tx.current));
+    const targetTy = Math.min(f.ty + slackY, Math.max(f.ty - slackY, ty.current));
+    if (
+      Math.abs(targetSc - sc.current) < 0.001 &&
+      Math.abs(targetTx - tx.current) < 0.5 &&
+      Math.abs(targetTy - ty.current) < 0.5
+    ) {
+      return;
+    }
+    if (prefersReducedMotion()) {
+      scheduleTransform(targetTx, targetTy, targetSc);
+      return;
+    }
+    tx.current = targetTx;
+    ty.current = targetTy;
+    sc.current = targetSc;
+    const opts = {
+      duration: Motion.panel,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    };
+    Animated.parallel([
+      Animated.timing(translateX, { toValue: targetTx, ...opts }),
+      Animated.timing(translateY, { toValue: targetTy, ...opts }),
+      Animated.timing(scaleAnim, { toValue: targetSc, ...opts }),
+    ]).start();
+  }, [applyTransform, screenWidth, mapHeight, scheduleTransform, translateX, translateY, scaleAnim]);
 
   // ── Pointer / touch handlers ──
   const onTouchStart = useCallback((e: any) => {
@@ -443,7 +485,8 @@ export default function PortfolioMapScreen() {
   const onTouchEnd = useCallback(() => {
     gesture.current.active = false;
     gesture.current.pinchDist = 0;
-  }, []);
+    snapBack();
+  }, [snapBack]);
 
   // Mouse drag (web/desktop)
   const onMouseDown = useCallback((e: any) => {
@@ -474,7 +517,8 @@ export default function PortfolioMapScreen() {
 
   const onMouseUp = useCallback(() => {
     gesture.current.active = false;
-  }, []);
+    snapBack();
+  }, [snapBack]);
 
   const onWheel = useCallback(
     (e: any) => {
@@ -482,15 +526,21 @@ export default function PortfolioMapScreen() {
       const delta = e.deltaY ?? e.nativeEvent?.deltaY ?? 0;
       const factor = delta > 0 ? 0.92 : 1.08;
       scheduleTransform(tx.current * factor, ty.current * factor, sc.current * factor);
+      if (wheelSnapTimer.current) clearTimeout(wheelSnapTimer.current);
+      wheelSnapTimer.current = setTimeout(snapBack, 250);
     },
-    [scheduleTransform]
+    [scheduleTransform, snapBack]
   );
 
   const zoomBy = useCallback(
     (factor: number) => {
       scheduleTransform(tx.current * factor, ty.current * factor, sc.current * factor);
+      if (factor < 1) {
+        if (wheelSnapTimer.current) clearTimeout(wheelSnapTimer.current);
+        wheelSnapTimer.current = setTimeout(snapBack, 250);
+      }
     },
-    [scheduleTransform]
+    [scheduleTransform, snapBack]
   );
 
   const handleSelect = useCallback((id: string) => {

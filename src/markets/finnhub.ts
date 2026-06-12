@@ -112,6 +112,111 @@ export async function fetchMarketNews(
     }));
 }
 
+// ─── Price history ───────────────────────────────────────────────
+// Stocks come from the Yahoo chart API via the /api/chart Vercel proxy
+// (Yahoo sends no CORS headers; Finnhub candles are premium-only).
+// BTC history comes straight from CoinGecko.
+
+export type HistoryRange = '1D' | '1W' | '1M' | '3M' | '1Y';
+
+export const HISTORY_RANGES: HistoryRange[] = ['1D', '1W', '1M', '3M', '1Y'];
+
+export interface HistoryPoint {
+  label: string;
+  value: number;
+}
+
+const CHART_PROXY_BASE = process.env.EXPO_PUBLIC_CHART_PROXY || '/api/chart';
+
+const RANGE_PARAMS: Record<HistoryRange, { range: string; interval: string }> = {
+  '1D': { range: '1d', interval: '5m' },
+  '1W': { range: '5d', interval: '30m' },
+  '1M': { range: '1mo', interval: '1d' },
+  '3M': { range: '3mo', interval: '1d' },
+  '1Y': { range: '1y', interval: '1wk' },
+};
+
+const COINGECKO_DAYS: Record<HistoryRange, number> = {
+  '1D': 1,
+  '1W': 7,
+  '1M': 30,
+  '3M': 90,
+  '1Y': 365,
+};
+
+function historyLabel(ms: number, range: HistoryRange): string {
+  const d = new Date(ms);
+  if (range === '1D') {
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  if (range === '1W') {
+    return d.toLocaleDateString([], { weekday: 'short', hour: 'numeric' });
+  }
+  if (range === '1Y') {
+    return d.toLocaleDateString([], { month: 'short', year: '2-digit' });
+  }
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+interface YahooChartResponse {
+  chart?: {
+    result?: {
+      timestamp?: number[];
+      indicators?: { quote?: { close?: (number | null)[] }[] };
+    }[];
+    error?: { description?: string } | null;
+  };
+}
+
+export async function fetchStockHistory(
+  symbol: string,
+  range: HistoryRange
+): Promise<HistoryPoint[]> {
+  const { range: r, interval } = RANGE_PARAMS[range];
+  const res = await fetch(
+    `${CHART_PROXY_BASE}?symbol=${encodeURIComponent(symbol)}&range=${r}&interval=${interval}`
+  );
+  if (!res.ok) throw new Error(`Chart request failed (${res.status})`);
+  const data = (await res.json()) as YahooChartResponse;
+  const result = data.chart?.result?.[0];
+  const timestamps = result?.timestamp ?? [];
+  const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  const points: HistoryPoint[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const close = closes[i];
+    if (close === null || close === undefined) continue;
+    points.push({ label: historyLabel(timestamps[i] * 1000, range), value: close });
+  }
+  if (points.length < 2) throw new Error('No chart data available');
+  return points;
+}
+
+interface CoinGeckoChartResponse {
+  prices?: [number, number][];
+}
+
+export async function fetchBtcHistory(range: HistoryRange): Promise<HistoryPoint[]> {
+  const days = COINGECKO_DAYS[range];
+  const res = await fetch(
+    `${COINGECKO_BASE}/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`
+  );
+  if (!res.ok) throw new Error(`CoinGecko chart request failed (${res.status})`);
+  const data = (await res.json()) as CoinGeckoChartResponse;
+  const prices = data.prices ?? [];
+  // CoinGecko returns hourly (or 5-min) granularity — thin to ~120 points.
+  const step = Math.max(1, Math.floor(prices.length / 120));
+  const points: HistoryPoint[] = [];
+  for (let i = 0; i < prices.length; i += step) {
+    points.push({ label: historyLabel(prices[i][0], range), value: prices[i][1] });
+  }
+  if (points.length < 2) throw new Error('No chart data available');
+  return points;
+}
+
+export function fetchHistory(quote: MarketQuote, range: HistoryRange): Promise<HistoryPoint[]> {
+  return quote.isCrypto ? fetchBtcHistory(range) : fetchStockHistory(quote.symbol, range);
+}
+
 interface CoinGeckoPriceResponse {
   bitcoin?: { usd: number; usd_24h_change: number };
 }

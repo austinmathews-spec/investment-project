@@ -262,12 +262,13 @@ export default function SettingsScreen() {
         <TextInput
           style={styles.input}
           value={finnhubKey}
-          onChangeText={setFinnhubKey}
+          onChangeText={(t) => setFinnhubKey(t.replace(/\s+/g, ''))}
           placeholder="Finnhub API key"
           placeholderTextColor={Colors.textTertiary}
           secureTextEntry
           autoCapitalize="none"
           autoCorrect={false}
+          spellCheck={false}
         />
         <Text style={styles.hint}>
           Get a free key at finnhub.io — sign up and copy the API key from your dashboard.
