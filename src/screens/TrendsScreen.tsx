@@ -7,6 +7,7 @@ import { AppData } from '../types';
 import { loadAppData } from '../storage';
 import { formatCurrency, formatCurrencyDecimal, formatDate } from '../utils/format';
 import LargeChart from '../components/LargeChart';
+import ComparisonChart from '../components/ComparisonChart';
 import FilterChips from '../components/FilterChips';
 import ScreenSkeleton from '../components/ScreenSkeleton';
 
@@ -99,6 +100,48 @@ export default function TrendsScreen() {
           />
         </View>
       )}
+
+      {/* vs. Market (SPY) */}
+      {(() => {
+        const spySnapshots = snapshots.filter(s => s.spyPrice != null && s.spyPrice > 0);
+        if (spySnapshots.length < 2) return null;
+        const baseNW = spySnapshots[0].netWorth;
+        const baseSPY = spySnapshots[0].spyPrice!;
+        const nwGrowth = spySnapshots.map(s => ((s.netWorth - baseNW) / baseNW) * 100);
+        const spyGrowth = spySnapshots.map(s => ((s.spyPrice! - baseSPY) / baseSPY) * 100);
+        const spyLabels = spySnapshots.map(s => formatDate(s.date));
+        const latestNW = nwGrowth[nwGrowth.length - 1];
+        const latestSPY = spyGrowth[spyGrowth.length - 1];
+        const outperformance = latestNW - latestSPY;
+        const beating = outperformance >= 0;
+        return (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>vs. Market (S&P 500)</Text>
+            <View style={styles.marketSummary}>
+              <View style={[styles.marketBadge, { backgroundColor: beating ? Colors.accentDim : 'rgba(255,80,0,0.08)' }]}>
+                <Feather name={beating ? 'trending-up' : 'trending-down'} size={14} color={beating ? Colors.positive : Colors.negative} />
+                <Text style={[styles.marketBadgeText, { color: beating ? Colors.positive : Colors.negative }]}>
+                  {beating ? 'Outperforming' : 'Underperforming'} by {Math.abs(outperformance).toFixed(1)}%
+                </Text>
+              </View>
+              <Text style={styles.marketHint}>
+                Your wealth {latestNW >= 0 ? '+' : ''}{latestNW.toFixed(1)}% vs SPY {latestSPY >= 0 ? '+' : ''}{latestSPY.toFixed(1)}%
+              </Text>
+            </View>
+            <View style={styles.chartContainer}>
+              <ComparisonChart
+                series={[
+                  { label: 'Your Wealth', color: Colors.accent, data: nwGrowth },
+                  { label: 'S&P 500', color: Colors.textTertiary, data: spyGrowth },
+                ]}
+                labels={spyLabels}
+                width={chartWidthClamped}
+                height={220}
+              />
+            </View>
+          </View>
+        );
+      })()}
 
       {/* Period Changes */}
       <View style={styles.section}>
@@ -241,5 +284,26 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: FontSizes.sm,
     textAlign: 'center',
+  },
+  marketSummary: {
+    marginBottom: Spacing.md,
+  },
+  marketBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.round,
+    gap: 6,
+  },
+  marketBadgeText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+  },
+  marketHint: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.sm,
+    marginTop: Spacing.xs,
   },
 });

@@ -268,6 +268,10 @@ export function parseSnapshots(
       }
     }
 
+    const spyPrice = savingsFields
+      ? (savingsFields['$SPY Price for Reference'] as number) ?? undefined
+      : undefined;
+
     return {
       id: rec.id,
       date,
@@ -275,6 +279,7 @@ export function parseSnapshots(
       totalLiabilities,
       netWorth: totalNetworth,
       accountBalances,
+      spyPrice,
     };
   });
 }

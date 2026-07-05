@@ -30,6 +30,7 @@ export interface NetWorthSnapshot {
   totalLiabilities: number;
   netWorth: number;
   accountBalances: Record<string, number>; // accountId -> balance
+  spyPrice?: number; // $SPY Price for Reference on this date
 }
 
 export interface Goal {
