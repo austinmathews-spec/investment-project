@@ -241,6 +241,18 @@ export async function reorderGoals(orderedIds: string[]): Promise<AppData> {
     .map(g => ({ ...g, priority: orderedIds.indexOf(g.id) }))
     .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
   await saveAppData(data);
+
+  // Sync updated priorities to Airtable
+  const config = await loadAirtableConfig();
+  if (config?.pat && config?.baseId && !_demoMode) {
+    try {
+      await Promise.all(
+        data.goals.map(g => pushGoalToAirtable(config.pat, config.baseId, g, g.id))
+      );
+    } catch {
+      // Airtable sync failed silently; priorities saved locally
+    }
+  }
   return data;
 }
 
