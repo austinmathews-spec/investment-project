@@ -31,6 +31,7 @@ import {
 } from '../utils/format';
 import { prefersReducedMotion } from '../utils/motion';
 import MiniChart from '../components/MiniChart';
+import LargeChart from '../components/LargeChart';
 import Skeleton from '../components/Skeleton';
 import BottomSheet from '../components/BottomSheet';
 import AnimatedNumber from '../components/AnimatedNumber';
@@ -202,12 +203,11 @@ function DetailContent({ node, chartWidth }: { node: MapNodeData; chartWidth: nu
 
       {filteredHistory.length >= 2 ? (
         <View style={styles.detailChartWrap}>
-          <MiniChart
-            data={filteredHistory.map((h) => h.value)}
+          <LargeChart
+            data={filteredHistory.map((h) => ({ label: h.date, value: h.value }))}
             width={chartWidth}
-            height={120}
+            height={200}
             color={rangeColor}
-            showFill
           />
         </View>
       ) : (
@@ -311,7 +311,7 @@ export default function PortfolioMapScreen() {
   // ── Derived nodes (memoized; only recomputes when data changes) ──
   const nodes: MapNodeData[] = useMemo(() => {
     if (!data) return [];
-    const accounts = data.accounts;
+    const accounts = data.accounts.filter(a => a.balance !== 0);
     if (accounts.length === 0) return [];
     const balances = accounts.map((a) => Math.abs(a.balance));
     const maxBal = Math.max(...balances, 1);
@@ -615,7 +615,7 @@ export default function PortfolioMapScreen() {
 
       {/* Detail: bottom sheet on mobile, side panel on desktop */}
       {isMobile ? (
-        <BottomSheet visible={selectedNode !== null} onClose={closeDetail}>
+        <BottomSheet visible={selectedNode !== null} onClose={closeDetail} maxHeightRatio={0.92}>
           {selectedNode && <DetailContent node={selectedNode} chartWidth={screenWidth - Spacing.lg * 2} />}
         </BottomSheet>
       ) : (
@@ -654,7 +654,7 @@ function DesktopDetailPanel({ node, onClose }: { node: MapNodeData; onClose: () 
       <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityLabel="Close detail">
         <Feather name="x" size={20} color={Colors.textSecondary} />
       </TouchableOpacity>
-      <DetailContent node={node} chartWidth={320 - Spacing.lg * 2} />
+      <DetailContent node={node} chartWidth={400 - Spacing.lg * 2} />
     </Animated.View>
   );
 }
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
     right: Spacing.lg,
     top: Spacing.lg,
     bottom: Spacing.lg,
-    width: 320,
+    width: 400,
     backgroundColor: Colors.cardBackground,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
