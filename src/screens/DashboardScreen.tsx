@@ -145,6 +145,10 @@ export default function DashboardScreen() {
     value: s.netWorth,
   }));
 
+  const spyChartData = data.snapshots.map((s) => ({
+    value: s.spyPrice ?? 0,
+  }));
+
   // Burn rate
   const totalMonthlyExpenses = data.expenses.reduce((sum, e) => sum + e.effectiveAmount, 0);
   const expensesByCategory = data.expenses.reduce<Record<string, number>>((acc, e) => {
@@ -233,6 +237,7 @@ export default function DashboardScreen() {
             width={chartWidth}
             height={200}
             color={Colors.accent}
+            spyData={spyChartData}
           />
         </View>
       )}

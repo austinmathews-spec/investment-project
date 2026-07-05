@@ -9,6 +9,10 @@ interface DataPoint {
   value: number;
 }
 
+interface SpyDataPoint {
+  value: number; // SPY price at this same index
+}
+
 interface LargeChartProps {
   data: DataPoint[];
   width: number;
@@ -17,6 +21,7 @@ interface LargeChartProps {
   title?: string;
   showLabels?: boolean;
   showGrid?: boolean;
+  spyData?: SpyDataPoint[]; // SPY prices aligned with data points
 }
 
 export default function LargeChart({
@@ -27,6 +32,7 @@ export default function LargeChart({
   title,
   showLabels = true,
   showGrid = true,
+  spyData,
 }: LargeChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const gradientId = useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -122,6 +128,14 @@ export default function LargeChart({
     <View style={styles.container}>
       {title && <Text style={styles.title}>{title}</Text>}
 
+      {/* SPY legend hint */}
+      {spyData && spyData.length === data.length && spyData[0].value > 0 && (
+        <View style={styles.spyLegend}>
+          <View style={styles.spyLegendLine} />
+          <Text style={styles.spyLegendText}>S&P 500</Text>
+        </View>
+      )}
+
       {/* Tooltip above chart */}
       <View style={styles.tooltipContainer}>
         {activeData && (
@@ -169,6 +183,33 @@ export default function LargeChart({
             })}
 
           <Polygon points={fillPoints} fill={`url(#lgChartGrad-${gradientId})`} />
+          {/* SPY reference line (normalized to same scale as primary data) */}
+          {spyData && spyData.length === data.length && spyData[0].value > 0 && (() => {
+            const baseSpy = spyData[0].value;
+            const baseVal = data[0].value;
+            const spyPoints = spyData.map((sp, i) => {
+              // Normalize: what would baseVal be worth if it grew like SPY?
+              const spyNormalized = baseVal * (sp.value / baseSpy);
+              const x = paddingLeft + (i / (data.length - 1)) * chartWidth;
+              const y = paddingTop + chartHeight - ((spyNormalized - min) / range) * chartHeight;
+              // Clamp y to chart bounds
+              const clampedY = Math.max(paddingTop, Math.min(paddingTop + chartHeight, y));
+              return `${x},${clampedY}`;
+            }).join(' ');
+            return (
+              <Polyline
+                points={spyPoints}
+                fill="none"
+                stroke={Colors.textTertiary}
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                strokeDasharray="6,4"
+                strokeOpacity={0.6}
+              />
+            );
+          })()}
+
           <Polyline
             points={polylinePoints}
             fill="none"
@@ -256,5 +297,25 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: FontSizes.xs,
     marginTop: 1,
+  },
+  spyLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 5,
+    marginBottom: 2,
+  },
+  spyLegendLine: {
+    width: 16,
+    height: 0,
+    borderTopWidth: 1.5,
+    borderTopColor: Colors.textTertiary,
+    borderStyle: 'dashed',
+    opacity: 0.6,
+  },
+  spyLegendText: {
+    color: Colors.textTertiary,
+    fontSize: FontSizes.xs - 1,
+    opacity: 0.7,
   },
 });

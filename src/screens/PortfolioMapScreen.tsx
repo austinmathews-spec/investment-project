@@ -162,7 +162,7 @@ const RANGES = [
   { key: 'All', months: 0 },
 ] as const;
 
-function DetailContent({ node, chartWidth }: { node: MapNodeData; chartWidth: number }) {
+function DetailContent({ node, chartWidth, spyByDate }: { node: MapNodeData; chartWidth: number; spyByDate?: Map<string, number> }) {
   const [range, setRange] = useState<string>('All');
   const positive = node.change >= 0;
   const color = positive ? Colors.positive : Colors.negative;
@@ -208,6 +208,7 @@ function DetailContent({ node, chartWidth }: { node: MapNodeData; chartWidth: nu
             width={chartWidth}
             height={200}
             color={rangeColor}
+            spyData={spyByDate ? filteredHistory.map((h) => ({ value: spyByDate.get(h.date) ?? 0 })) : undefined}
           />
         </View>
       ) : (
@@ -274,6 +275,9 @@ export default function PortfolioMapScreen() {
   const tx = useRef(0);
   const ty = useRef(0);
   const sc = useRef(1);
+  const homeTx = useRef(0);
+  const homeTy = useRef(0);
+  const homeSc = useRef(1);
   const gesture = useRef({
     active: false,
     startX: 0,
@@ -348,6 +352,11 @@ export default function PortfolioMapScreen() {
     [nodes, selectedId]
   );
 
+  const spyByDate = useMemo(() => {
+    if (!data) return new Map<string, number>();
+    return new Map(data.snapshots.map(s => [s.date, s.spyPrice ?? 0]));
+  }, [data]);
+
   // ── Transform application, rAF-batched ──
   const applyTransform = useCallback(() => {
     rafPending.current = false;
@@ -388,8 +397,38 @@ export default function PortfolioMapScreen() {
     const fitScale = Math.min(screenWidth / w, mapHeight / h, 1.4);
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
+    homeTx.current = -cx * fitScale;
+    homeTy.current = -cy * fitScale;
+    homeSc.current = fitScale;
     scheduleTransform(-cx * fitScale, -cy * fitScale, fitScale);
   }, [nodes, screenWidth, mapHeight, scheduleTransform]);
+
+  // Snap back to home position with a spring animation
+  const snapToHome = useCallback(() => {
+    tx.current = homeTx.current;
+    ty.current = homeTy.current;
+    sc.current = homeSc.current;
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: homeTx.current,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 60,
+      }),
+      Animated.spring(translateY, {
+        toValue: homeTy.current,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 60,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: homeSc.current,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 60,
+      }),
+    ]).start();
+  }, [translateX, translateY, scaleAnim]);
 
   useEffect(() => {
     fitToView();
@@ -443,7 +482,8 @@ export default function PortfolioMapScreen() {
   const onTouchEnd = useCallback(() => {
     gesture.current.active = false;
     gesture.current.pinchDist = 0;
-  }, []);
+    snapToHome();
+  }, [snapToHome]);
 
   // Mouse drag (web/desktop)
   const onMouseDown = useCallback((e: any) => {
@@ -474,7 +514,8 @@ export default function PortfolioMapScreen() {
 
   const onMouseUp = useCallback(() => {
     gesture.current.active = false;
-  }, []);
+    snapToHome();
+  }, [snapToHome]);
 
   const onWheel = useCallback(
     (e: any) => {
@@ -616,11 +657,11 @@ export default function PortfolioMapScreen() {
       {/* Detail: bottom sheet on mobile, side panel on desktop */}
       {isMobile ? (
         <BottomSheet visible={selectedNode !== null} onClose={closeDetail} maxHeightRatio={0.92}>
-          {selectedNode && <DetailContent node={selectedNode} chartWidth={screenWidth - Spacing.lg * 2} />}
+          {selectedNode && <DetailContent node={selectedNode} chartWidth={screenWidth - Spacing.lg * 2} spyByDate={spyByDate} />}
         </BottomSheet>
       ) : (
         selectedNode && (
-          <DesktopDetailPanel node={selectedNode} onClose={closeDetail} />
+          <DesktopDetailPanel node={selectedNode} onClose={closeDetail} spyByDate={spyByDate} />
         )
       )}
     </View>
@@ -628,7 +669,7 @@ export default function PortfolioMapScreen() {
 }
 
 // Desktop: right-side panel with slide/fade-in and an X close affordance.
-function DesktopDetailPanel({ node, onClose }: { node: MapNodeData; onClose: () => void }) {
+function DesktopDetailPanel({ node, onClose, spyByDate }: { node: MapNodeData; onClose: () => void; spyByDate?: Map<string, number> }) {
   const slide = useRef(new Animated.Value(40)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -654,7 +695,7 @@ function DesktopDetailPanel({ node, onClose }: { node: MapNodeData; onClose: () 
       <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityLabel="Close detail">
         <Feather name="x" size={20} color={Colors.textSecondary} />
       </TouchableOpacity>
-      <DetailContent node={node} chartWidth={400 - Spacing.lg * 2} />
+      <DetailContent node={node} chartWidth={400 - Spacing.lg * 2} spyByDate={spyByDate} />
     </Animated.View>
   );
 }

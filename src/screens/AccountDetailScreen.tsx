@@ -78,6 +78,12 @@ export default function AccountDetailScreen() {
     value: h.balance,
   }));
 
+  // Build SPY data aligned with account history dates
+  const spyByDate = new Map(data.snapshots.map(s => [s.date, s.spyPrice ?? 0]));
+  const spyChartData = history.map((h) => ({
+    value: spyByDate.get(h.date) ?? 0,
+  }));
+
   // Growth calculations
   const firstBalance = history.length > 0 ? history[0].balance : account.balance;
   const currentBalance = account.balance;
@@ -160,6 +166,7 @@ export default function AccountDetailScreen() {
               width={Math.min(screenWidth - 40, 800)}
               height={220}
               color={Colors.accent}
+              spyData={spyChartData}
             />
           </View>
         )}
