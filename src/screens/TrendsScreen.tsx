@@ -44,6 +44,10 @@ export default function TrendsScreen() {
     value: s.netWorth,
   }));
 
+  const spyChartData = snapshots.map((s) => ({
+    value: s.spyPrice ?? 0,
+  }));
+
   const latest = snapshots[snapshots.length - 1];
   const first = snapshots[0];
   const totalGrowth = latest && first ? latest.netWorth - first.netWorth : 0;
@@ -97,6 +101,7 @@ export default function TrendsScreen() {
             width={chartWidthClamped}
             height={220}
             color={Colors.accent}
+            spyData={spyChartData}
           />
         </View>
       )}
